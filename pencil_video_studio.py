@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Pencil Video Studio — ảnh → video vẽ chì, với Tkinter hoặc dòng lệnh.
 
-Python >= 3.10; pip install numpy Pillow; cài FFmpeg có encoder libx264.
-Không cần OpenCV, Internet hay dịch vụ AI. Xem README.md để sử dụng.
+Python >= 3.11; cài requirements.txt và chạy model_assets.py một lần.
+Nhận diện AI chạy trên máy. Bản Windows đóng gói kèm mô hình và FFmpeg.
 """
 from __future__ import annotations
 
@@ -28,8 +28,9 @@ import warnings
 try:
     import numpy as np
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
+    from drawing_engine import StrokeRenderer, PENCILS, PRIORITIES, DETECTORS
 except ImportError as exc:
-    raise SystemExit("Thiếu thư viện. Chạy: python -m pip install numpy Pillow") from exc
+    raise SystemExit("Thiếu thư viện. Chạy Setup-Windows.bat hoặc python -m pip install -r requirements.txt") from exc
 
 try:
     import tkinter as tk
@@ -38,11 +39,15 @@ except ImportError:
     tk = None
 
 APP_NAME = "Pencil Video Studio"
-VERSION = "2.0.0"
+VERSION = "3.0.0"
 LOG = logging.getLogger(__name__)
 MAX_FILES = 200
 Image.MAX_IMAGE_PIXELS = 40_000_000
 PRESETS = {
+    "YouTube · 1920 × 1080 · 30fps": (1920, 1080),
+    "TikTok / Reels / Shorts · 1080 × 1920": (1080, 1920),
+    "Facebook Feed · 1080 × 1350": (1080, 1350),
+    "Facebook vuông · 1080 × 1080": (1080, 1080),
     "HD ngang · 1280 × 720": (1280, 720),
     "HD dọc · 720 × 1280": (720, 1280),
     "Vuông · 1080 × 1080": (1080, 1080),
@@ -76,8 +81,8 @@ def check_cancel(cancel: threading.Event):
 class RenderConfig:
     width: int = 1280
     height: int = 720
-    fps: int = 24
-    duration: float = 8.0
+    fps: int = 30
+    duration: float = 0.0
     hold: float = 2.0
     fit: str = "contain"
     order: str = "horizontal"
@@ -88,6 +93,21 @@ class RenderConfig:
     safe_margin: bool = False
     show_pencil: bool = True
     merge: bool = False
+    pencil_type: str = "hb"
+    pen_size: float = 95.0
+    line_width: float = 1.3
+    pen_speed: float = 1.0
+    fill_speed: float = 2.5
+    detail: float = 0.7
+    smoothness: float = 0.8
+    priority: str = "subject_background_text"
+    subject_detection: str = "ai"
+    detect_text: bool = True
+    face_priority: bool = True
+    camera: float = 0.025
+    vignette: float = 0.06
+    transition: float = 0.35
+    platform: str = "custom"
 
     def validate(self):
         for name in ("width", "height", "fps"):
@@ -98,25 +118,32 @@ class RenderConfig:
             raise ValueError("Chiều rộng/cao phải là số chẵn từ 16 đến 1920.")
         if not 1 <= self.fps <= 60:
             raise ValueError("FPS phải nằm trong khoảng 1–60.")
-        limits = {"duration": (0.1, 600), "hold": (0, 120), "contrast": (0.2, 3),
-                  "softness": (1, 30), "texture": (0, 0.3)}
+        limits = {"duration": (0, 600), "hold": (0, 120), "contrast": (0.2, 3),
+                  "softness": (1, 30), "texture": (0, 0.3), "pen_size": (20, 200),
+                  "line_width": (0.4, 6), "pen_speed": (0.25, 4), "fill_speed": (0.5, 6),
+                  "detail": (0, 1), "smoothness": (0, 1), "camera": (0, 0.08),
+                  "vignette": (0, 0.3), "transition": (0, 2)}
         for name, (low, high) in limits.items():
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value):
                 raise ValueError(f"{name} phải là số hữu hạn.")
             if not low <= value <= high:
                 raise ValueError(f"{name} phải nằm trong khoảng {low}–{high}.")
-        for name, choices in (("fit", FITS.values()), ("order", ORDERS.values()), ("effect", EFFECTS.values())):
+        for name, choices in (("fit", FITS.values()), ("order", ORDERS.values()), ("effect", EFFECTS.values()),
+                              ("pencil_type", PENCILS.values()), ("priority", PRIORITIES.values()),
+                              ("subject_detection", DETECTORS.values()),
+                              ("platform", ("custom", "youtube", "vertical", "facebook"))):
             if getattr(self, name) not in choices:
                 raise ValueError(f"Giá trị {name} không hợp lệ.")
-        for name in ("safe_margin", "show_pencil", "merge"):
+        for name in ("safe_margin", "show_pencil", "merge", "detect_text", "face_priority"):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f"{name} phải là true hoặc false.")
         return self
 
     @property
     def draw_frames(self):
-        return max(2, round(self.duration * self.fps))
+        # Auto duration (duration=0) is resolved by StrokeRenderer after tracing.
+        return max(2, round((self.duration or 12) / self.pen_speed * self.fps))
 
     @property
     def frame_count(self):
@@ -138,7 +165,7 @@ def save_settings(path: Path, cfg: RenderConfig, files: list[str], output: str):
     cfg.validate()
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    data = {"version": 2, "render": asdict(cfg), "files": files, "output": output}
+    data = {"version": 3, "render": asdict(cfg), "files": files, "output": output}
     tmp = None
     try:
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
@@ -161,7 +188,7 @@ def load_settings(path: Path):
         if Path(path).stat().st_size > 1_000_000:
             raise ValueError("Tệp cấu hình quá lớn.")
         data = json.loads(Path(path).read_text(encoding="utf-8"))
-        if not isinstance(data, dict) or data.get("version") != 2:
+        if not isinstance(data, dict) or data.get("version") not in (2, 3):
             raise ValueError("Phiên bản cấu hình không được hỗ trợ.")
         values = data.get("render", {})
         if not isinstance(values, dict):
@@ -180,9 +207,13 @@ def load_settings(path: Path):
 
 
 def find_ffmpeg():
-    executable = shutil.which("ffmpeg")
+    executable = None if getattr(sys, "frozen", False) else shutil.which("ffmpeg")
     if not executable:
-        raise RuntimeError("Không tìm thấy FFmpeg. Hãy cài FFmpeg và thêm vào PATH rồi mở lại ứng dụng.")
+        try:
+            import imageio_ffmpeg
+            executable = imageio_ffmpeg.get_ffmpeg_exe()
+        except (ImportError, RuntimeError) as exc:
+            raise RuntimeError("Không tìm thấy FFmpeg đi kèm. Chạy lại Setup-Windows.bat hoặc cài FFmpeg vào PATH.") from exc
     try:
         result = subprocess.run([executable, "-hide_banner", "-encoders"], capture_output=True,
                                 text=True, errors="replace", timeout=15, **subprocess_options())
@@ -211,100 +242,28 @@ def load_image(path: Path, cfg: RenderConfig):
                 white.alpha_composite(rgba)
                 rgb = white.convert("RGB")
         margin = 0.05 if cfg.safe_margin else 0
-        box = (max(1, round(cfg.width * (1 - 2 * margin))), max(1, round(cfg.height * (1 - 2 * margin))))
+        left = right = top = bottom = margin
+        if cfg.safe_margin and cfg.platform == "vertical":
+            left, right, top, bottom = 0.06, 0.14, 0.08, 0.18
+        elif cfg.safe_margin and cfg.platform == "youtube":
+            bottom = 0.08
+        box = (max(1, round(cfg.width * (1 - left - right))), max(1, round(cfg.height * (1 - top - bottom))))
         fit = ImageOps.contain if cfg.fit == "contain" else ImageOps.fit
         scaled = fit(rgb, box, method=Image.Resampling.LANCZOS)
         canvas = Image.new("RGB", (cfg.width, cfg.height), "white")
-        canvas.paste(scaled, ((cfg.width - scaled.width) // 2, (cfg.height - scaled.height) // 2))
+        canvas.paste(scaled, (round(cfg.width * left) + (box[0] - scaled.width) // 2,
+                              round(cfg.height * top) + (box[1] - scaled.height) // 2))
         return canvas
     except (OSError, ValueError, UnidentifiedImageError, Image.DecompressionBombError,
             Image.DecompressionBombWarning) as exc:
         raise ValueError(f"Không đọc được ảnh '{path.name}': {exc}") from exc
 
 
-class PencilRenderer:
-    """Chuẩn bị mỗi ảnh một lần, phát từng khung hình thay vì lưu cả video vào RAM."""
-    def __init__(self, path: Path, cfg: RenderConfig, cancel: threading.Event):
-        self.cfg = cfg.validate()
+class PencilRenderer(StrokeRenderer):
+    def __init__(self, path, cfg, cancel, report=lambda **kw: None):
+        cfg.validate()
         check_cancel(cancel)
-        rgb = load_image(Path(path), cfg)
-        gray = ImageEnhance.Contrast(ImageOps.grayscale(rgb)).enhance(cfg.contrast)
-        blurred = ImageOps.invert(gray).filter(ImageFilter.GaussianBlur(cfg.softness))
-        g = np.asarray(gray, dtype=np.float32)
-        dodge = np.clip(g * 255.0 / np.maximum(255.0 - np.asarray(blurred, dtype=np.float32), 1.0), 0, 255)
-        edge = np.asarray(gray.filter(ImageFilter.FIND_EDGES), dtype=np.float32).copy()
-        # FIND_EDGES giữ pixel biên: bỏ khung đen giả ở cạnh ảnh.
-        edge[[0, -1], :] = 0
-        edge[:, [0, -1]] = 0
-        line = np.clip(255.0 - edge * 1.8, 0, 255)
-        tone = np.minimum(dodge, 0.74 * g + 66)
-        pencil = np.minimum(tone, line)
-        rng = np.random.default_rng(2026)
-        grain = rng.normal(0, cfg.texture * 18, g.shape).astype(np.float32)
-        self.paper = np.clip(252.0 + grain, 0, 255).astype(np.float32)
-        self.lines = np.minimum(line + grain, self.paper).astype(np.float32)
-        if cfg.effect == "color":
-            color = np.asarray(rgb, dtype=np.float32)
-            target = 0.6 * color + 0.4 * pencil[:, :, None]
-        else:
-            target = np.repeat(pencil[:, :, None], 3, axis=2)
-        self.target = np.clip(target + grain[:, :, None], 0, 255).astype(np.uint8)
-        self.rank = self._rank_map()
-        self._final = Image.fromarray(self.target)
-        check_cancel(cancel)
-
-    def _rank_map(self):
-        h, w = self.cfg.height, self.cfg.width
-        y, x = np.indices((h, w), dtype=np.float32)
-        band = max(4, round(min(w, h) / 70))
-        if self.cfg.order == "horizontal":
-            rows = np.floor(y / band)
-            along = np.where(rows % 2 == 0, x / w, 1 - x / w)
-            rank = (rows + along) / math.ceil(h / band)
-        elif self.cfg.order == "vertical":
-            cols = np.floor(x / band)
-            along = np.where(cols % 2 == 0, y / h, 1 - y / h)
-            rank = (cols + along) / math.ceil(w / band)
-        else:
-            tile = max(16, round(min(w, h) / 10))
-            nx, ny = math.ceil(w / tile), math.ceil(h / tile)
-            order = np.random.default_rng(42).permutation(nx * ny)
-            ids = (y.astype(np.int32) // tile) * nx + x.astype(np.int32) // tile
-            rank = (order[ids] + (y % tile + x % tile / tile) / tile) / (nx * ny)
-        return np.asarray(rank, dtype=np.float32)
-
-    def frame(self, progress: float):
-        progress = min(1.0, max(0.0, progress))
-        if progress >= 1:
-            return self._final.copy()
-        # Hai lượt: phác nét trước, tô sắc độ sau.
-        line_progress = min(1.0, progress / 0.6)
-        shade_progress = max(0.0, (progress - 0.6) / 0.4)
-        line_mask = np.clip((line_progress - self.rank) * 220, 0, 1)
-        mono = self.paper + (self.lines - self.paper) * line_mask
-        shade_mask = np.clip((shade_progress - self.rank) * 220, 0, 1)[:, :, None]
-        pixels = mono[:, :, None] + (self.target.astype(np.float32) - mono[:, :, None]) * shade_mask
-        frame = Image.fromarray(np.clip(pixels, 0, 255).astype(np.uint8))
-        if self.cfg.show_pencil and progress > 0:
-            phase = line_progress if progress < 0.6 else shade_progress
-            # Lấy vị trí gần nét đang vẽ trên lưới giảm mẫu để tránh tìm kiếm toàn ảnh.
-            step = max(1, min(self.cfg.width, self.cfg.height) // 180)
-            small = self.rank[::step, ::step]
-            index = int(np.argmin(np.abs(small - phase)))
-            row, col = np.unravel_index(index, small.shape)
-            self._pencil(frame, col * step, row * step)
-        return frame
-
-    @staticmethod
-    def _pencil(image, x, y):
-        size = max(12, round(min(image.size) * 0.09))
-        d = ImageDraw.Draw(image)
-        d.polygon([(x, y), (x + size * 0.24, y - size * 0.43),
-                   (x + size * 0.48, y - size * 0.21)], fill="#e9c498")
-        d.polygon([(x + size * 0.24, y - size * 0.43), (x + size, y - size * 1.2),
-                   (x + size * 1.24, y - size * 0.98), (x + size * 0.48, y - size * 0.21)],
-                  fill="#dca832", outline="#5b472a")
-        d.line([(x, y), (x + size * 0.13, y - size * 0.15)], fill="#252525", width=max(2, size // 18))
+        super().__init__(load_image(Path(path), cfg), cfg, lambda: check_cancel(cancel), report)
 
 
 class VideoWriter:
@@ -417,27 +376,38 @@ def run_batch(files, cfg: RenderConfig, output, cancel: threading.Event, report:
     job = Path(tempfile.mkdtemp(prefix=time.strftime("pencil_%Y%m%d_%H%M%S_"), dir=out))
     outputs = []
     started, done, last_report = time.monotonic(), 0, 0.0
-    total = len(paths) * cfg.frame_count
+    previous_final = None
 
     def render(path, writer, index):
-        nonlocal done, last_report
+        nonlocal done, last_report, previous_final
         report(status=f"Chuẩn bị ảnh {index + 1}/{len(paths)}: {path.name}")
-        renderer = PencilRenderer(path, cfg, cancel)
-        for frame_index in range(cfg.frame_count):
+        renderer = PencilRenderer(path, cfg, cancel, report)
+        if cfg.merge and index and cfg.transition > 0:
+            next_paper = renderer.frame(0, 0)
+            transition_frames = max(1, round(cfg.transition * cfg.fps))
+            for i in range(transition_frames):
+                check_cancel(cancel)
+                t = (i + 1) / transition_frames
+                writer.write(Image.blend(previous_final, next_paper, t * t * (3 - 2 * t)))
+        for frame_index in range(renderer.frame_count):
             check_cancel(cancel)
-            progress = min(1, frame_index / (cfg.draw_frames - 1))
-            frame = renderer.frame(progress)
+            progress = min(1, frame_index / (renderer.draw_frames - 1))
+            scene_progress = frame_index / max(1, renderer.frame_count - 1)
+            frame = renderer.frame(progress, scene_progress)
             writer.write(frame)
             done += 1
             now = time.monotonic()
-            if now - last_report >= 0.25 or done == total:
+            if now - last_report >= 0.25 or frame_index == renderer.frame_count - 1:
+                overall = (index + (frame_index + 1) / renderer.frame_count) / len(paths)
                 elapsed = now - started
-                eta = elapsed * (total - done) / done
+                eta = elapsed * (1 - overall) / overall
                 preview = frame.copy()
                 preview.thumbnail((640, 480), Image.Resampling.LANCZOS)
-                report(progress=done / total, status=f"Ảnh {index + 1}/{len(paths)} · {done}/{total} khung · còn ~{eta:.0f}s",
+                report(progress=overall,
+                       status=f"Ảnh {index + 1}/{len(paths)} · {frame_index + 1}/{renderer.frame_count} khung · còn ~{eta:.0f}s",
                        preview=preview)
                 last_report = now
+        previous_final = frame
 
     try:
         if cfg.merge:
@@ -497,6 +467,7 @@ class App:
         self.worker = None
         self.closing = False
         self.photo = None
+        self.preview_source = None
         self.files, self.outputs, self.controls = [], [], []
         self.v = {}
         self.root.title(f"{APP_NAME} {VERSION}")
@@ -563,35 +534,74 @@ class App:
         self.count_label.pack(anchor="w", pady=(6, 0))
 
         settings = ttk.Frame(self.tabs, padding=8)
-        self.tabs.add(settings, text="2. Hiệu ứng & video")
-        settings.columnconfigure(1, weight=1)
-        preset = next((k for k, size in PRESETS.items() if size == (cfg.width, cfg.height)), next(iter(PRESETS)))
-        self._combo(settings, 0, "Khung hình", "preset", PRESETS, preset)
-        for row, (label, key, mapping) in enumerate((("Căn ảnh", "fit", FITS), ("Thứ tự vẽ", "order", ORDERS),
-                                                     ("Hiệu ứng", "effect", EFFECTS)), 1):
-            selected = next(k for k, value in mapping.items() if value == getattr(cfg, key))
-            self._combo(settings, row, label, key, mapping, selected)
-        for row, (label, key) in enumerate((("Vẽ mỗi ảnh (giây)", "duration"), ("Giữ ảnh cuối (giây)", "hold"),
-                                          ("FPS (1–60)", "fps"), ("Tương phản (0.2–3)", "contrast"),
-                                          ("Độ mềm (1–30)", "softness"), ("Vân giấy (0–0.3)", "texture")), 4):
-            self.v[key] = tk.StringVar(value=str(getattr(cfg, key)))
-            ttk.Label(settings, text=label).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=3)
-            entry = ttk.Entry(settings, textvariable=self.v[key], width=12)
-            entry.grid(row=row, column=1, sticky="ew", pady=3)
-            self.controls.append((entry, "normal"))
-        for row, (label, key) in enumerate((("Hiện bút chì", "show_pencil"), ("Chừa viền an toàn 5%", "safe_margin"),
-                                          ("Ghép tất cả ảnh thành một video", "merge")), 10):
+        self.tabs.add(settings, text="2. Thiết lập vẽ")
+        self.settings_tabs = ttk.Notebook(settings)
+        self.settings_tabs.pack(fill="both", expand=True)
+        pages = {}
+        for key, title in (("video", "Video"), ("pencil", "Bút & nét"), ("regions", "Chủ thể & chữ"), ("look", "Điện ảnh")):
+            page = ttk.Frame(self.settings_tabs, padding=10)
+            page.columnconfigure(1, weight=1)
+            self.settings_tabs.add(page, text=title)
+            pages[key] = page
+        preset = next((k for k, size in PRESETS.items() if size == (cfg.width, cfg.height)
+                       and not k.startswith(("YouTube", "TikTok", "Facebook"))), next(iter(PRESETS)))
+        if cfg.platform != "custom":
+            preset = next((k for k, size in PRESETS.items() if size == (cfg.width, cfg.height)), preset)
+        self.platform = cfg.platform
+        self._combo(pages["video"], 0, "Nền tảng / khung", "preset", PRESETS, preset).bind("<<ComboboxSelected>>", self.apply_preset)
+        self._combo(pages["video"], 1, "Căn ảnh", "fit", FITS, next(k for k,v in FITS.items() if v == cfg.fit))
+        self._combo(pages["pencil"], 0, "Loại bút", "pencil_type", PENCILS, next(k for k,v in PENCILS.items() if v == cfg.pencil_type))
+        self._combo(pages["regions"], 0, "Tách chủ thể", "subject_detection", DETECTORS,
+                    next(k for k,v in DETECTORS.items() if v == cfg.subject_detection))
+        self._combo(pages["regions"], 1, "Thứ tự vẽ", "priority", PRIORITIES,
+                    next(k for k,v in PRIORITIES.items() if v == cfg.priority))
+        self._combo(pages["look"], 0, "Sắc độ", "effect", EFFECTS, next(k for k,v in EFFECTS.items() if v == cfg.effect))
+        numbers = {
+            "video": [(2, "Thời gian vẽ (0=tự động)", "duration"), (3, "Giữ tranh cuối (giây)", "hold"),
+                      (4, "FPS (1–60)", "fps")],
+            "pencil": [(1, "Cỡ bút hiển thị (20–200)", "pen_size"), (2, "Độ dày nét (0.4–6)", "line_width"),
+                       (3, "Tốc độ bút (0.25–4×)", "pen_speed"), (4, "Tốc độ đánh bóng (0.5–6×)", "fill_speed"),
+                       (5, "Mức chi tiết (0–1)", "detail"), (6, "Độ uốn mềm (0–1)", "smoothness")],
+            "look": [(1, "Tương phản (0.2–3)", "contrast"), (2, "Độ mềm sắc độ (1–30)", "softness"),
+                     (3, "Vân giấy (0–0.3)", "texture"), (4, "Zoom chậm (0–0.08)", "camera"),
+                     (5, "Tối viền (0–0.3)", "vignette"), (6, "Chuyển ảnh khi ghép (giây)", "transition")],
+        }
+        for page, items in numbers.items():
+            for row, label, key in items:
+                self.v[key] = tk.StringVar(value=str(getattr(cfg, key)))
+                ttk.Label(pages[page], text=label).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=6)
+                entry = ttk.Entry(pages[page], textvariable=self.v[key], width=10)
+                entry.grid(row=row, column=1, sticky="ew", pady=6)
+                self.controls.append((entry, "normal"))
+        checks = (("video", 5, "Chừa vùng an toàn theo nền tảng", "safe_margin"),
+                  ("video", 6, "Ghép tất cả ảnh thành một video", "merge"),
+                  ("pencil", 7, "Hiện bút chuyển động theo nét", "show_pencil"),
+                  ("regions", 2, "Tự nhận diện và tách vùng chữ", "detect_text"),
+                  ("regions", 3, "Ưu tiên chi tiết khuôn mặt", "face_priority"))
+        for page, row, label, key in checks:
             self.v[key] = tk.BooleanVar(value=getattr(cfg, key))
-            checkbox = ttk.Checkbutton(settings, text=label, variable=self.v[key])
-            checkbox.grid(row=row, column=0, columnspan=2, sticky="w", pady=2)
+            checkbox = ttk.Checkbutton(pages[page], text=label, variable=self.v[key])
+            checkbox.grid(row=row, column=0, columnspan=2, sticky="w", pady=6)
             self.controls.append((checkbox, "normal"))
-
-        ttk.Label(right, text="Xem trước", font=(family, 12, "bold")).pack(anchor="w")
-        self.preview = tk.Label(right, text="Thêm ảnh rồi bấm “Xem trước”.", bg="#e8e4dc", fg="#57534e")
-        self.preview.pack(fill="both", expand=True, pady=8)
-        self._button(right, "Xem trước ảnh đã chọn", self.show_preview).pack(anchor="w")
-        ttk.Label(right, text="Xem trước là ảnh hoàn thiện. Khi xuất, khung hình đang vẽ sẽ xuất hiện tại đây.",
-                  wraplength=420).pack(anchor="w", pady=8)
+        ttk.Label(pages["regions"], text="Xem vùng trước khi xuất: xanh lá = chủ thể, vàng = chữ, xanh dương = khuôn mặt. "
+                  "AI có thể nhầm trên ảnh phức tạp; bạn có thể đổi chế độ và thứ tự vẽ.",
+                  wraplength=390).grid(row=4, column=0, columnspan=2, sticky="w", pady=14)
+        ttk.Label(pages["video"], text="Thời gian 0: tự tính theo số nét. Tăng tốc độ bút sẽ rút ngắn thời gian vẽ. "
+                  "Giữ toàn ảnh giúp không cắt mất người hoặc chữ.", wraplength=390).grid(
+                      row=7, column=0, columnspan=2, sticky="w", pady=14)
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
+        ttk.Label(right, text="Xưởng vẽ · xem trước", font=(family, 12, "bold")).grid(row=0, column=0, sticky="w")
+        self.preview = tk.Label(right, text="Thêm ảnh rồi chọn một chế độ xem trước.", bg="#eee9df", fg="#57534e")
+        self.preview.grid(row=1, column=0, sticky="nsew", pady=8)
+        self.preview.bind("<Configure>", lambda event: self.fit_preview())
+        preview_buttons = ttk.Frame(right)
+        preview_buttons.grid(row=2, column=0, sticky="ew")
+        for label, mode in (("Xem tranh", "image"), ("Xem vùng", "regions"), ("Vẽ thử 6s", "animation")):
+            self._button(preview_buttons, label, lambda value=mode: self.show_preview(value)).pack(side="left", padx=(0, 4))
+        self.analysis_label = ttk.Label(right, text="Nhận diện và dựng nét chạy ngay trên máy, không gửi ảnh lên mạng.",
+                                        wraplength=440)
+        self.analysis_label.grid(row=3, column=0, sticky="w", pady=8)
 
         output_box = ttk.LabelFrame(outer, text="3. Xuất video", padding=8)
         output_box.grid(row=3, column=0, sticky="ew", pady=(8, 0))
@@ -618,12 +628,25 @@ class App:
         self.controls.append((button, "normal"))
         return button
 
+    def fit_preview(self, image=None):
+        if image is not None:
+            self.preview_source = image.copy()
+        width, height = self.preview.winfo_width(), self.preview.winfo_height()
+        if self.preview_source is not None and width > 4 and height > 4:
+            fitted = self.preview_source.copy()
+            fitted.thumbnail((width - 4, height - 4), Image.Resampling.LANCZOS)
+            self.photo = self.ImageTk.PhotoImage(fitted)
+            self.preview.configure(image=self.photo, text="")
+        if hasattr(self, "analysis_label"):
+            self.analysis_label.configure(wraplength=max(200, width))
+
     def _combo(self, parent, row, label, key, choices, value):
         self.v[key] = tk.StringVar(value=value)
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=3)
         widget = ttk.Combobox(parent, textvariable=self.v[key], values=list(choices), state="readonly", width=27)
         widget.grid(row=row, column=1, sticky="ew", pady=3)
         self.controls.append((widget, "readonly"))
+        return widget
 
     def busy(self):
         return self.worker is not None
@@ -688,16 +711,29 @@ class App:
         except OSError as exc:
             messagebox.showerror(APP_NAME, f"Không mở được thư mục: {exc}", parent=self.root)
 
+    def apply_preset(self, event=None):
+        label = self.v["preset"].get()
+        self.platform = ("youtube" if label.startswith("YouTube") else
+                         "vertical" if label.startswith("TikTok") else
+                         "facebook" if label.startswith("Facebook") else "custom")
+        if self.platform != "custom":
+            self.v["fps"].set("30")
+            self.v["fit"].set(next(k for k,v in FITS.items() if v == "contain"))
+            self.v["safe_margin"].set(True)
+
     def get_cfg(self):
         try:
             width, height = PRESETS[self.v["preset"].get()]
-            return RenderConfig(width=width, height=height, fps=int(self.v["fps"].get()),
-                duration=float(self.v["duration"].get()), hold=float(self.v["hold"].get()),
-                fit=FITS[self.v["fit"].get()], order=ORDERS[self.v["order"].get()],
-                effect=EFFECTS[self.v["effect"].get()], contrast=float(self.v["contrast"].get()),
-                softness=float(self.v["softness"].get()), texture=float(self.v["texture"].get()),
-                safe_margin=self.v["safe_margin"].get(), show_pencil=self.v["show_pencil"].get(),
-                merge=self.v["merge"].get()).validate()
+            values = dict(width=width, height=height, platform=self.platform, fps=int(self.v["fps"].get()))
+            for key in ("duration", "hold", "contrast", "softness", "texture", "pen_size", "line_width",
+                        "pen_speed", "fill_speed", "detail", "smoothness", "camera", "vignette", "transition"):
+                values[key] = float(self.v[key].get())
+            for key in ("safe_margin", "show_pencil", "merge", "detect_text", "face_priority"):
+                values[key] = self.v[key].get()
+            for key, mapping in (("fit", FITS), ("effect", EFFECTS), ("pencil_type", PENCILS),
+                                 ("priority", PRIORITIES), ("subject_detection", DETECTORS)):
+                values[key] = mapping[self.v[key].get()]
+            return RenderConfig(**values).validate()
         except (ValueError, KeyError, tk.TclError) as exc:
             raise ValueError(f"Thông số không hợp lệ: {exc}") from exc
 
@@ -748,7 +784,7 @@ class App:
         files = list(self.files)
         self._launch(lambda: run_batch(files, cfg, output, self.cancel, self.mailbox.report))
 
-    def show_preview(self):
+    def show_preview(self, mode="image"):
         if self.busy() or not self.files:
             return
         try:
@@ -764,8 +800,19 @@ class App:
                               softness=max(1, cfg.softness * scale))
 
         def work():
-            renderer = PencilRenderer(Path(path), preview_cfg, self.cancel)
-            self.mailbox.report(preview=renderer.frame(1), status="Xem trước đã sẵn sàng")
+            renderer = PencilRenderer(Path(path), preview_cfg, self.cancel, self.mailbox.report)
+            if mode == "regions":
+                self.mailbox.report(preview=renderer.analysis_preview())
+            elif mode == "animation":
+                for index in range(73):
+                    check_cancel(self.cancel)
+                    started = time.monotonic()
+                    self.mailbox.report(preview=renderer.frame(index / 72), progress=index / 72)
+                    self.cancel.wait(max(0, 1 / 12 - (time.monotonic() - started)))
+                check_cancel(self.cancel)
+            else:
+                self.mailbox.report(preview=renderer.frame(1))
+            self.mailbox.report(status="Xem trước đã sẵn sàng")
             return None
         self._launch(work)
 
@@ -777,13 +824,14 @@ class App:
 
     def poll(self):
         updates = self.mailbox.take()
+        if "notes" in updates:
+            self.analysis_label.configure(text=" ".join(updates["notes"]))
         if "progress" in updates:
             self.prog["value"] = updates["progress"] * 100
         if "status" in updates and not self.cancel.is_set():
             self.status.configure(text=updates["status"])
         if "preview" in updates and not self.closing:
-            self.photo = self.ImageTk.PhotoImage(updates["preview"])
-            self.preview.configure(image=self.photo, text="")
+            self.fit_preview(updates["preview"])
         # Chờ luồng thực sự kết thúc trước khi cho khởi chạy tác vụ tiếp theo.
         if self.worker is not None and not self.worker.is_alive():
             self.worker.join()
@@ -826,16 +874,56 @@ class App:
             self.root.destroy()
 
 
+def self_test(output):
+    """Exercise bundled native libraries, both model sessions, and video encoding."""
+    from PIL import ImageFont
+    import traceback
+    folder = Path(output).resolve()
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        source = folder / "self-test-input.png"
+        picture = Image.new("RGB", (384, 288), "white")
+        draw = ImageDraw.Draw(picture)
+        draw.ellipse((125, 35, 255, 175), fill="#9b6950", outline="#242424", width=3)
+        draw.rectangle((140, 175, 240, 230), fill="#557e9a")
+        draw.text((40, 240), "PENCIL STUDIO", fill="black", font=ImageFont.load_default(size=30))
+        picture.save(source)
+        cfg = RenderConfig(width=384, height=288, fps=10, duration=0.6, hold=0.2,
+                           camera=0, vignette=0, show_pencil=False)
+        cancel = threading.Event()
+        renderer = PencilRenderer(source, cfg, cancel)
+        if not renderer.regions.text_boxes:
+            raise RuntimeError("Kiểm tra mô hình chữ thất bại: không phát hiện chữ trong ảnh mẫu.")
+        if not renderer.strokes:
+            raise RuntimeError("Không tạo được đường nét.")
+        outputs = run_batch([source], cfg, folder / "video", cancel)
+        decoded = subprocess.run([find_ffmpeg(), "-v", "error", "-i", outputs[0], "-f", "rawvideo",
+                                  "-pix_fmt", "rgb24", "pipe:1"], capture_output=True, timeout=60,
+                                  **subprocess_options())
+        expected = cfg.frame_count * cfg.width * cfg.height * 3
+        if decoded.returncode or len(decoded.stdout) != expected:
+            raise RuntimeError("Không giải mã được đủ khung hình MP4 vừa xuất.")
+        result = {"status": "passed", "version": VERSION, "frames": cfg.frame_count,
+                  "strokes": len(renderer.strokes), "text_regions": len(renderer.regions.text_boxes),
+                  "subject_model": "u2netp", "ffmpeg": find_ffmpeg(), "videos": outputs}
+        (folder / "self-test.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return 0
+    except Exception:
+        (folder / "self-test-error.txt").write_text(traceback.format_exc(), encoding="utf-8")
+        return 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Tạo video vẽ chì từ ảnh — giao diện hoặc dòng lệnh.")
     parser.add_argument("files", nargs="*", help="Đường dẫn ảnh đầu vào")
     parser.add_argument("--version", action="version", version=f"{APP_NAME} {VERSION}")
     parser.add_argument("--headless", action="store_true", help="Xuất không cần giao diện")
+    parser.add_argument("--self-test", action="store_true", help="Kiểm tra bản đóng gói, mô hình và FFmpeg")
     parser.add_argument("--config", type=Path, default=settings_path(), help="Tệp cấu hình giao diện")
     parser.add_argument("--output", type=Path, default=Path("pencil_output"))
-    parser.add_argument("--size", default="1280x720", help="Rộng x cao, số chẵn, tối đa 1920 mỗi chiều")
-    parser.add_argument("--fps", type=int, default=24)
-    parser.add_argument("--duration", type=float, default=8, help="Thời gian vẽ mỗi ảnh (giây)")
+    parser.add_argument("--size", default=None, help="Rộng x cao; bỏ trống để theo --platform")
+    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--duration", type=float, default=0, help="Thời gian vẽ; 0=tự tính theo chi tiết")
     parser.add_argument("--hold", type=float, default=2, help="Thời gian giữ ảnh cuối (giây)")
     parser.add_argument("--fit", choices=FITS.values(), default="contain")
     parser.add_argument("--order", choices=ORDERS.values(), default="horizontal")
@@ -846,8 +934,25 @@ def main(argv=None):
     parser.add_argument("--merge", action="store_true")
     parser.add_argument("--no-pencil", action="store_true")
     parser.add_argument("--safe-margin", action="store_true")
+    parser.add_argument("--pencil-type", choices=PENCILS.values(), default="hb")
+    parser.add_argument("--pen-size", type=float, default=95)
+    parser.add_argument("--line-width", type=float, default=1.3)
+    parser.add_argument("--pen-speed", type=float, default=1)
+    parser.add_argument("--fill-speed", type=float, default=2.5)
+    parser.add_argument("--detail", type=float, default=0.7)
+    parser.add_argument("--smoothness", type=float, default=0.8)
+    parser.add_argument("--priority", choices=PRIORITIES.values(), default="subject_background_text")
+    parser.add_argument("--subject-detection", choices=DETECTORS.values(), default="ai")
+    parser.add_argument("--no-text", action="store_true")
+    parser.add_argument("--no-face", action="store_true")
+    parser.add_argument("--camera", type=float, default=0.025)
+    parser.add_argument("--vignette", type=float, default=0.06)
+    parser.add_argument("--transition", type=float, default=0.35)
+    parser.add_argument("--platform", choices=("custom", "youtube", "vertical", "facebook"), default="custom")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    if args.self_test:
+        return self_test(args.output)
     if not args.headless:
         if tk is None:
             parser.exit(1, "Thiếu Tkinter. Linux: cài python3-tk; Windows/macOS: dùng Python có Tkinter.\n")
@@ -864,13 +969,18 @@ def main(argv=None):
     signal.signal(signal.SIGINT, lambda *_: cancel.set())
     signal.signal(signal.SIGTERM, lambda *_: cancel.set())
     try:
-        size = args.size.lower().split("x")
+        default_sizes = {"custom": "1280x720", "youtube": "1920x1080", "vertical": "1080x1920", "facebook": "1080x1350"}
+        size = (args.size or default_sizes[args.platform]).lower().split("x")
         if len(size) != 2:
             raise ValueError("--size phải có dạng 1280x720.")
         cfg = RenderConfig(width=int(size[0]), height=int(size[1]), fps=args.fps, duration=args.duration,
             hold=args.hold, fit=args.fit, order=args.order, effect=args.effect, contrast=args.contrast,
             softness=args.softness, texture=args.texture, merge=args.merge,
-            show_pencil=not args.no_pencil, safe_margin=args.safe_margin).validate()
+            show_pencil=not args.no_pencil, safe_margin=args.safe_margin or args.platform != "custom", pencil_type=args.pencil_type,
+            pen_size=args.pen_size, line_width=args.line_width, pen_speed=args.pen_speed, fill_speed=args.fill_speed,
+            detail=args.detail, smoothness=args.smoothness, priority=args.priority,
+            subject_detection=args.subject_detection, detect_text=not args.no_text, face_priority=not args.no_face,
+            camera=args.camera, vignette=args.vignette, transition=args.transition, platform=args.platform).validate()
 
         def report(**kwargs):
             if "status" in kwargs:

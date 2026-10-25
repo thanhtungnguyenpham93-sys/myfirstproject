@@ -28,7 +28,8 @@ class StudioTests(unittest.TestCase):
         draw.ellipse((60, 10, 110, 70), fill="#c04030")
         image.save(self.image)
         self.cfg = studio.RenderConfig(width=96, height=64, fps=10, duration=0.4,
-                                       hold=0.2, show_pencil=False)
+                                       hold=0.2, show_pencil=False, subject_detection="center",
+                                       detect_text=False, face_priority=False, camera=0, vignette=0, transition=0)
         self.cancel = threading.Event()
 
     def test_reject_invalid_configuration(self):
@@ -112,7 +113,9 @@ class StudioTests(unittest.TestCase):
         self.assertEqual(mailbox.take(), {})
 
     def test_missing_ffmpeg(self):
-        with patch.object(studio.shutil, "which", return_value=None):
+        import imageio_ffmpeg
+        with patch.object(studio.shutil, "which", return_value=None), \
+                patch.object(imageio_ffmpeg, "get_ffmpeg_exe", side_effect=RuntimeError("missing")):
             with self.assertRaisesRegex(RuntimeError, "Không tìm thấy FFmpeg"):
                 studio.find_ffmpeg()
 
@@ -215,7 +218,7 @@ class StudioTests(unittest.TestCase):
             time.sleep(0.01)
         self.assertFalse(app.busy(), "Tác vụ giao diện không kết thúc đúng hạn")
 
-    @unittest.skipUnless(studio.tk is not None and os.environ.get("DISPLAY") and shutil.which("ffmpeg"),
+    @unittest.skipUnless(studio.tk is not None and (os.name == "nt" or os.environ.get("DISPLAY")),
                          "Cần Tkinter, màn hình X và FFmpeg")
     def test_gui_preview_export_and_duplicate_start(self):
         root = studio.tk.Tk()
@@ -240,7 +243,7 @@ class StudioTests(unittest.TestCase):
             error.assert_not_called()
             info.assert_called_once()
 
-    @unittest.skipUnless(studio.tk is not None and os.environ.get("DISPLAY") and shutil.which("ffmpeg"),
+    @unittest.skipUnless(studio.tk is not None and (os.name == "nt" or os.environ.get("DISPLAY")),
                          "Cần Tkinter, màn hình X và FFmpeg")
     def test_gui_cancel_restores_controls(self):
         root = studio.tk.Tk()
@@ -257,7 +260,7 @@ class StudioTests(unittest.TestCase):
             self.assertEqual(app.outputs, [])
             error.assert_not_called()
 
-    @unittest.skipUnless(studio.tk is not None and os.environ.get("DISPLAY"), "Cần Tkinter và màn hình X")
+    @unittest.skipUnless(studio.tk is not None and (os.name == "nt" or os.environ.get("DISPLAY")), "Cần Tkinter và màn hình X")
     def test_gui_actions_visible_at_minimum_window_size(self):
         root = studio.tk.Tk()
         self.addCleanup(root.destroy)

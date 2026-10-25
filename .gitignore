@@ -2,3 +2,9 @@ __pycache__/
 *.py[cod]
 .venv/
 pencil_output/
+models/*.onnx
+models/*.download
+build/
+dist/
+smoke-output/
+*.log

@@ -1,0 +1,58 @@
+name: Build Windows portable
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [pencil-video-studio-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+      - name: Install dependencies and verified subject model
+        run: |
+          python -m pip install -r requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python model_assets.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test source
+        run: |
+          python -m unittest -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python pencil_video_studio.py --self-test --output smoke-output/source
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build portable application
+        run: python -m PyInstaller --noconfirm --clean PencilVideoStudio.spec
+      - name: Test bundled application
+        run: |
+          $process = Start-Process -FilePath dist/PencilVideoStudio/PencilVideoStudio.exe -ArgumentList '--self-test', '--output', 'smoke-output/bundled' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Bundled self-test failed: $($process.ExitCode)" }
+          if (!(Test-Path smoke-output/bundled/self-test.json)) { throw 'Missing self-test report' }
+          Get-Content smoke-output/bundled/self-test.json
+      - name: Package
+        run: |
+          Copy-Item README.md dist/PencilVideoStudio/
+          Copy-Item THIRD_PARTY.md dist/PencilVideoStudio/
+          Compress-Archive -Path dist/PencilVideoStudio -DestinationPath PencilVideoStudio-Windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PencilVideoStudio-Windows-x64
+          path: PencilVideoStudio-Windows-x64.zip
+          retention-days: 30
+      - name: Publish portable download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "windows-v3-${{ github.run_number }}"
+          gh release create $tag PencilVideoStudio-Windows-x64.zip --target "${{ github.sha }}" --title "Pencil Video Studio 3 - Windows" --notes-file RELEASE_NOTES.md --latest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

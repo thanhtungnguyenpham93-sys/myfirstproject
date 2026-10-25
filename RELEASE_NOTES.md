@@ -1,0 +1,15 @@
+# Pencil Video Studio 3 — Windows 10/11 x64
+
+Download **PencilVideoStudio-Windows-x64.zip**, extract the entire archive, then
+open **PencilVideoStudio/PencilVideoStudio.exe**. Keep its `_internal` folder.
+No Python or separate FFmpeg installation is required for the portable package.
+
+This version traces smooth image contours and curved hatching, runs local subject
+segmentation and text-region detection, supports subject/background/text ordering,
+2H/HB/2B/6B/charcoal pens, independent pen and line sizes, drawing/shading speeds,
+preview animation, slow camera movement, merged-image transitions and social video presets.
+
+The Windows build checks the source and the packaged executable before publication.
+Subject/text detection is automatic and can be imperfect; use the region preview
+to check it. This is a drawing animation, not character animation. See the included
+README for controls and limitations. The portable executable is not code-signed.

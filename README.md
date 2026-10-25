@@ -1,111 +1,105 @@
-# Pencil Video Studio 2.0
+# Pencil Video Studio 3 — vẽ ảnh thành video
 
-Ứng dụng tiếng Việt biến ảnh thành video vẽ chì, chạy trên máy với Python, Pillow, NumPy và FFmpeg. Có giao diện Tkinter và chế độ dòng lệnh cho máy chủ không có màn hình.
+Ứng dụng cho Windows 10/11 x64: đưa nhiều ảnh vào, tự nhận diện vùng nổi bật và chữ, lập các đường nét rồi tạo video bút chì vẽ lần lượt. AI chạy trên máy, ảnh không được gửi lên dịch vụ bên ngoài.
 
-## Về bản nâng cấp này
+## Tải và mở trên Windows
 
-Tệp được cung cấp chỉ là đoạn cuối 4.592 byte của một chương trình: bắt đầu bằng một khối `if` thụt lề, thiếu imports, lớp `App`, bảng preset, bộ xử lý ảnh và hàm `run_batch`. Bản này xây dựng lại ứng dụng có thể chạy độc lập từ các chức năng nhận diện được trong đoạn đó. Tệp đính kèm gốc được giữ nguyên.
+**Bản portable, không cần Python:** mở mục **Releases**, tải `PencilVideoStudio-Windows-x64.zip` của bản dựng đã hoàn tất. Giải nén **toàn bộ** rồi mở `PencilVideoStudio/PencilVideoStudio.exe`. Giữ thư mục `_internal` đi kèm; không chỉ chép riêng tệp `.exe`. Bản portable gồm Python runtime, OpenCV, mô hình chủ thể, mô hình vùng chữ và FFmpeg. Sau khi tải và giải nén, xử lý được khi không có mạng.
 
-Các tùy chọn cũ chỉ xuất hiện tên như nhận diện chủ thể/chữ, hatch, cinematic và camera không có phần triển khai trong tệp nguồn. Bản này không giả lập những chức năng đó bằng các nút không hoạt động và không nhập cấu hình cũ không rõ định dạng. Đây là hiệu ứng vẽ bằng xử lý ảnh, không phải mô hình AI dựng lại nét bút hoặc OCR. Video không kèm âm thanh.
+[Trang tải các bản phát hành](https://github.com/thanhtungnguyenpham93-sys/myfirstproject/releases)
 
-## Các chức năng chính
+**Bản mã nguồn:** tải ZIP của nhánh `pencil-video-studio-v3`, giải nén, cài **Python 3.12 x64** từ python.org (có Python Launcher và Tcl/Tk). Chạy `Setup-Windows.bat` một lần với Internet, rồi mở `Start-Windows.bat`. Lần thiết lập đầu tải thư viện và mô hình U²-Net khoảng 4,6 MB, có kiểm tra checksum. Không cần tự cài FFmpeg riêng.
 
-- Chì đen trắng hoặc chì màu; hai giai đoạn phác nét và tô sắc độ.
-- Vẽ ngang, dọc hoặc theo ô ngẫu nhiên; tùy chọn hiện bút chì và vân giấy.
-- Khung ngang/dọc HD, Full HD, khung vuông; giữ toàn ảnh hoặc cắt để lấp đầy; viền an toàn.
-- Chọn, xóa, đổi thứ tự ảnh; xuất riêng hoặc ghép thành một video.
-- Xem trước ảnh hoàn thiện và khung hình trong lúc xuất; tiến độ và thời gian còn lại ước tính.
-- Xử lý EXIF, ảnh trong suốt và đường dẫn tiếng Việt. GIF/ảnh động sử dụng khung đầu tiên.
-- MP4 H.264/yuv420p, tối ưu phát trực tuyến với `faststart`.
-- Giao diện chỉ cập nhật trên luồng chính. Xử lý ảnh và FFmpeg chạy nền; ảnh xem trước không tích tụ trong hàng đợi.
-- Hủy tác vụ và đóng cửa sổ có dọn tiến trình/tệp tạm. Video đã hoàn tất được giữ lại.
-- Mỗi lần xuất tạo thư mục mới; không ghi đè video sẵn có.
-- Lưu cấu hình nguyên tử; báo rõ dữ liệu hỏng, giá trị không hợp lệ, ảnh lỗi và FFmpeg bị thiếu.
+**Tự tạo portable:** sau bước thiết lập, mở `Build-Windows.bat`. Kết quả ở `dist/PencilVideoStudio/`. Cách này cần Windows; tệp exe Windows không được tạo bằng cách đổi đuôi một tệp Python trên Linux.
 
-## Cài đặt
+## Quy trình sử dụng
 
-Yêu cầu **Python 3.10 trở lên**, **FFmpeg có encoder libx264** và Tkinter nếu dùng giao diện.
+1. Trong **Ảnh đầu vào**, thêm JPG/JPEG, PNG, WEBP, BMP, TIFF hoặc GIF; đổi thứ tự bằng ↑/↓. Ảnh động dùng khung đầu. Ảnh trong suốt được ghép trên giấy trắng; hướng EXIF được áp dụng.
+2. Trong **Thiết lập vẽ → Video**, chọn YouTube, TikTok/Reels/Shorts, Facebook Feed hoặc kích thước khác.
+3. Trong **Bút & nét**, chọn loại bút, độ dày, tốc độ và độ mềm. Cỡ bút hiển thị và độ dày nét là hai thông số độc lập.
+4. Trong **Chủ thể & chữ**, chọn tách chủ thể bằng AI, theo vùng trung tâm hoặc tắt; chọn thứ tự vẽ. Có thể bật/tắt nhận diện chữ và ưu tiên khuôn mặt.
+5. Bấm **Xem vùng** để kiểm tra: xanh lá = chủ thể, vàng = chữ, xanh dương = khuôn mặt. Bấm **Xem tranh** để xem kết quả hoặc **Vẽ thử 6s** để xem thứ tự nét trên bản xem trước giảm kích thước.
+6. Chọn thư mục, bật ghép nếu cần và bấm **Xuất MP4**. Chờ thông báo **Đã xuất**; 100% khung hình vẫn cần bước hoàn tất MP4.
 
-```bash
-python -m venv .venv
-```
+## Những gì bản 3 thực hiện
 
-Kích hoạt môi trường trên Windows PowerShell:
+| Yêu cầu | Cách thực hiện |
+|---|---|
+| Vẽ từng chi tiết | Lấy đường viền bằng OpenCV, làm mềm đường cong, vẽ tăng dần dọc theo chiều dài từng nét; bút nhấc khi đi sang nét khác |
+| Tô sắc độ | Các nét đánh bóng cong và đan chéo trong vùng tối, kết hợp lớp sắc độ graphite và vân giấy |
+| Ưu tiên chủ thể | U²-Net tách vùng nổi bật; bộ phát hiện khuôn mặt chính diện ưu tiên chi tiết mặt trong vùng chủ thể |
+| Ưu tiên chữ | Mô hình PP-OCR phát hiện vùng chữ; đường nét bám ảnh chữ gốc, không thay nội dung bằng font khác |
+| Chọn thứ tự | Chủ thể → nền → chữ; chủ thể → chữ → nền; chữ → chủ thể → nền; nền → chủ thể → chữ; hoặc không chia vùng |
+| Loại bút | 2H, HB, 2B, 6B, than chì; mỗi loại thay đổi độ đậm, độ rộng và hạt giấy |
+| Kích thước và tốc độ | Cỡ hình bút 20–200; nét 0,4–6; tốc độ bút 0,25–4×; tốc độ đánh bóng 0,5–6× |
+| Điện ảnh | Zoom chậm liên tục hướng về chủ thể, tối viền nhẹ, giấy có hạt, chuyển cảnh mềm giữa các ảnh được ghép |
+| Hàng loạt | Xuất riêng từng ảnh hoặc ghép thành một MP4; giữ video đã hoàn tất nếu ảnh sau bị lỗi |
+| Chạy độc lập | Bản Windows portable đóng gói thư viện, mô hình và encoder, không cần Python trên máy nhận |
 
-```powershell
-.venv\Scripts\Activate.ps1
-```
+Các nét được tái dựng từ ảnh bằng thị giác máy tính, không phải ghi lại nét vẽ của một họa sĩ. Chữ được dò vị trí và vẽ lại theo hình dạng pixel; chương trình không đọc hiểu nội dung chữ hay mô phỏng chính xác thứ tự viết tay của từng ký tự.
 
-Trên macOS/Linux:
+## Preset mạng xã hội
 
-```bash
-source .venv/bin/activate
-```
+| Preset | Độ phân giải | FPS mặc định |
+|---|---|---|
+| YouTube ngang | 1920 × 1080 | 30 |
+| TikTok / Facebook Reels / YouTube Shorts | 1080 × 1920 | 30 |
+| Facebook Feed | 1080 × 1350 | 30 |
+| Facebook vuông | 1080 × 1080 | 30 |
 
-Cài thư viện:
+Chọn preset tự đặt FPS, chế độ giữ toàn ảnh và vùng an toàn. Video dùng MP4/H.264/yuv420p và faststart. Vùng an toàn dọc chừa thêm phía dưới và bên phải để giảm bị các nút giao diện che; đây là bố cục gợi ý, không phải cam kết mọi phiên bản ứng dụng đều dùng cùng vùng che. Bạn có thể tắt vùng an toàn, đổi FPS hoặc cắt để lấp đầy khung.
+
+Ứng dụng xuất tệp để bạn đăng, không tự đăng video, không tự chọn nhạc và không bảo đảm đạt yêu cầu kiếm tiền hay phân phối của từng nền tảng.
+
+## Chọn thông số để nét mềm hơn
+
+- Bắt đầu với **HB**, độ dày **1–1,3**, mức chi tiết **0,65–0,8**, độ uốn mềm **0,8**.
+- Chọn **2H** nếu nét đang quá đậm; chọn **2B/6B** nếu muốn nhiều độ đậm và sắc độ hơn.
+- Đặt thời gian vẽ **0** để tự tính theo lượng nét, giới hạn 6–180 giây trước hệ số tốc độ. Đặt một số dương để chủ động thời gian. Tốc độ bút 2× làm thời gian vẽ còn khoảng một nửa, thời gian giữ tranh cuối không đổi.
+- Thời gian quá ngắn trên một ảnh nhiều chi tiết sẽ khiến nhiều nét hoàn thành trong mỗi khung; hãy tăng thời gian hoặc giảm tốc độ nếu muốn thấy đầu bút đi chậm.
+- Để giữ nguyên chân dung và chữ, nên dùng **Vừa khung**. Zoom khoảng **0,02–0,03**, tối viền **0,04–0,08** tạo chuyển động nhẹ mà ít cắt nội dung.
+- Nhận diện sai chủ thể: kiểm tra **Xem vùng**, thử **Vùng trung tâm**, đổi thứ tự hoặc tắt phân vùng. Bản này chưa có công cụ tô sửa mask bằng tay.
+
+## Dòng lệnh
 
 ```bash
 python -m pip install -r requirements.txt
-```
-
-Cài FFmpeg và bảo đảm `ffmpeg -version` chạy được trong terminal:
-
-- Windows: cài FFmpeg từ nguồn được liên kết trên https://ffmpeg.org/download.html, thêm thư mục `bin` vào PATH rồi mở lại terminal.
-- macOS có Homebrew: `brew install ffmpeg`. Python phải có hỗ trợ Tkinter; bản cài từ python.org có cung cấp Tk.
-- Debian/Ubuntu dùng Python hệ thống: `sudo apt install ffmpeg python3-tk python3-venv`.
-
-Kiểm tra Tkinter bằng `python -m tkinter`; cần môi trường desktop. Các bản Python tự biên dịch/độc lập có thể cần cài Tkinter phù hợp với chính interpreter đó.
-
-## Chạy giao diện
-
-```bash
+python model_assets.py
 python pencil_video_studio.py
 ```
 
-1. Thêm ảnh và sắp xếp thứ tự bằng nút ↑/↓.
-2. Chọn khung hình, hiệu ứng, thời gian vẽ và thời gian giữ cuối **cho mỗi ảnh**.
-3. Chọn một ảnh, bấm **Xem trước ảnh đã chọn** để kiểm tra bố cục. Đây là bản xem trước giảm kích thước, có thể khác đôi chút về độ mềm so với video xuất.
-4. Chọn thư mục, bật ghép nếu cần, rồi bấm **Xuất MP4**.
-5. Bấm **Dừng** để hủy. Chờ ứng dụng dọn dẹp; không cần đóng cưỡng bức.
-
-Mặc định mỗi ảnh vẽ 8 giây và giữ 2 giây, ở 24 FPS. Thời lượng thực làm tròn theo khung hình, tối thiểu 2 khung vẽ. Chỉ hỗ trợ tối đa 200 ảnh mỗi tác vụ và 40 triệu pixel mỗi ảnh nguồn để giới hạn bộ nhớ. File ảnh phải là định dạng được Pillow trên máy hỗ trợ; HEIC/RAW không được cài thêm trong gói này.
-
-Cấu hình tự lưu khi xuất hoặc đóng giao diện:
-
-- Windows: `%APPDATA%\pencil-video-studio\settings.json`
-- macOS: `~/Library/Application Support/pencil-video-studio/settings.json`
-- Linux: `$XDG_CONFIG_HOME/pencil-video-studio/settings.json` hoặc `~/.config/pencil-video-studio/settings.json`
-
-Có thể đổi vị trí bằng `--config duong_dan/settings.json`. Cấu hình lưu đường dẫn ảnh và thông số, không sao chép ảnh nguồn. Nếu cấu hình hỏng, ứng dụng thông báo và dùng mặc định; lần lưu tiếp theo sẽ thay thế nó bằng cấu hình mới.
-
-## Chạy không có giao diện
+Xuất dọc cho mạng xã hội:
 
 ```bash
-python pencil_video_studio.py --headless "anh_1.jpg" "anh_2.png" --output "videos" --merge --size 1280x720 --fps 24 --duration 8 --hold 2
+python pencil_video_studio.py --headless "anh1.jpg" "anh2.png" --platform vertical --merge --output videos --pencil-type 2b --line-width 1.2 --pen-speed 1 --priority subject_background_text
 ```
 
-Ví dụ video dọc, chì màu:
+Chạy không phân vùng AI/chữ:
 
 ```bash
-python pencil_video_studio.py --headless "anh.png" --output "videos" --size 720x1280 --effect color --order vertical --fit cover --safe-margin
+python pencil_video_studio.py --headless "anh.png" --subject-detection center --no-text --duration 20 --camera 0 --output videos
 ```
 
-Xem mọi tùy chọn bằng `python pencil_video_studio.py --help`. Các tùy chọn render trên dòng lệnh áp dụng với `--headless`; giao diện dùng cấu hình đã lưu. `--config` chỉ định tệp cấu hình giao diện, không ghi đè các đối số headless. Ctrl+C/SIGTERM yêu cầu hủy và dọn tệp tạm; mã thoát 130 khi hủy, 1 khi lỗi, 0 khi thành công.
+`--size` ghi đè độ phân giải preset; `--duration 0` dùng thời gian tự động. Xem toàn bộ tùy chọn bằng `--help`. `--config` chỉ định tệp cấu hình giao diện; chế độ headless dùng các đối số dòng lệnh. Mã thoát: 0 thành công, 1 lỗi, 130 hủy. Ctrl+C yêu cầu dừng và dọn encoder.
 
-Đầu ra nằm trong thư mục `pencil_YYYYMMDD_HHMMSS_<mã_ngẫu_nhiên>`. Chế độ ghép tạo `pencil_merged.mp4`; chế độ riêng đánh số từng ảnh. Nếu một ảnh sau bị lỗi, thông báo trả về vị trí các video trước đã xuất thành công. Nếu ghép bị lỗi hoặc bị hủy, video ghép chưa hoàn tất sẽ được xóa. Mất điện/kill cưỡng bức có thể để lại tệp `.render-*.mp4` và tệp đầu ra rỗng trong thư mục tác vụ.
+## Dữ liệu và giới hạn thực tế
 
-## Hiệu năng và giới hạn
+- AI U²-Net nhận diện vùng nổi bật, không bảo đảm tách đúng mọi người/vật trong ảnh có nền phức tạp. Bộ nhận diện mặt phù hợp mặt chính diện; có thể bỏ sót góc nghiêng.
+- Detector chữ có thể bỏ sót chữ nhỏ, chữ trang trí hoặc chữ sát nền. Chữ tiếng Việt giữ nguyên hình dạng từ ảnh nếu vùng chữ được phát hiện; chương trình không sửa chính tả hay dựng lại dấu bị mờ.
+- Có tối đa 200 ảnh/tác vụ, 40 triệu pixel/ảnh nguồn. Video tối đa 1920 pixel mỗi chiều, 60 FPS. Ảnh HEIC/RAW chưa có bộ đọc riêng.
+- Bản đồ nét được lập ở cạnh dài tối đa 900 pixel để cân bằng tốc độ và chi tiết; nét được vẽ tại độ phân giải xuất. Chữ rất nhỏ nên dùng ảnh rõ và crop nội dung hợp lý trước khi đưa vào.
+- Cần RAM cho ảnh, bản đồ vùng và mô hình. Full HD chậm hơn HD. Không bảo đảm thời gian dựng nhanh hơn thời lượng video trên mọi CPU.
+- Hoạt ảnh không làm nhân vật cử động như phim: chuyển động là đầu bút, tiến trình vẽ và camera nhẹ trên bức tranh.
+- Cấu hình lưu trong `%APPDATA%/pencil-video-studio/settings.json` trên Windows. Phiên bản 3 đọc được cấu hình phiên bản 2; những thông số mới nhận giá trị mặc định.
+- Mỗi lần xuất tạo thư mục mới và không ghi đè video sẵn có. Hủy bình thường dọn tệp dở; tắt máy/kill cưỡng bức có thể để lại tệp tạm hoặc tệp rỗng.
 
-Khung hình được chuyển từng khung đến FFmpeg, không giữ toàn bộ video trong bộ nhớ. Bộ nhớ vẫn phụ thuộc độ phân giải và kích thước ảnh nguồn; Full HD cần nhiều RAM và thời gian hơn HD. Khi dừng, bước xử lý ảnh Pillow/NumPy đang chạy cần kết thúc trước khi kiểm tra tín hiệu hủy. Encoder có luồng giám sát riêng để ngắt pipe khi hủy.
-
-Thời gian còn lại chỉ là ước tính theo tốc độ xử lý, không bao gồm chính xác thời gian hoàn tất MP4. Tiến độ khung hình 100% chưa đồng nghĩa tệp đã hoàn tất; chờ thông báo **Đã xuất**.
-
-## Kiểm thử
+## Kiểm thử và bản dựng
 
 ```bash
 python -m unittest -v
+python pencil_video_studio.py --self-test --output smoke-output
 ```
 
-Bộ kiểm thử dùng thư mục tạm và ảnh tổng hợp: cấu hình, EXIF, transparency, hiệu ứng, hủy, lỗi encoder, bảo vệ tệp sẵn có, xuất/ghép MP4 thật, giải mã lại khung hình và kiểm tra codec, kích thước, thời lượng, số khung. Các bài tích hợp cần `ffmpeg`/`ffprobe`; các bài giao diện cần Tkinter và màn hình (hoặc Xvfb trên Linux). Bài không đáp ứng điều kiện được báo **skipped**, không tính là đã xác minh.
+Self-test chạy cả hai mô hình, lập nét, xuất MP4 và giải mã lại đủ số khung. Báo cáo nằm ở `smoke-output/self-test.json`; lỗi ở `self-test-error.txt`. Bộ unittest kiểm tra thêm thứ tự vùng, vùng chưa đến lượt vẫn trắng, điều khiển bút, hủy, cấu hình, giao diện và encoder.
 
-Đã kiểm thử trên Linux với Python 3.12, NumPy 2.3.5, Pillow 12.3.0 và FFmpeg 7.1.5. Chưa chạy trực tiếp trên Windows/macOS.
+Workflow **Build Windows portable** chạy trên Windows, kiểm tra mã nguồn, đóng gói bằng PyInstaller, kiểm tra chính exe rồi mới đăng bản phát hành. Chỉ tải bản dựng đã hoàn tất thành công. Xem `VALIDATION.md` để biết những gì đã được xác minh; xem `THIRD_PARTY.md` về các thành phần bên ngoài.
