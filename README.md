@@ -1,4 +1,4 @@
-# Pencil Video Studio 3 — vẽ ảnh thành video
+# Pencil Video Studio 3.1 — vẽ ảnh thành video
 
 Ứng dụng cho Windows 10/11 x64: đưa nhiều ảnh vào, tự nhận diện vùng nổi bật và chữ, lập các đường nét rồi tạo video bút chì vẽ lần lượt. AI chạy trên máy, ảnh không được gửi lên dịch vụ bên ngoài.
 
@@ -16,7 +16,7 @@
 
 1. Trong **Ảnh đầu vào**, thêm JPG/JPEG, PNG, WEBP, BMP, TIFF hoặc GIF; đổi thứ tự bằng ↑/↓. Ảnh động dùng khung đầu. Ảnh trong suốt được ghép trên giấy trắng; hướng EXIF được áp dụng.
 2. Trong **Thiết lập vẽ → Video**, chọn YouTube, TikTok/Reels/Shorts, Facebook Feed hoặc kích thước khác.
-3. Trong **Bút & nét**, chọn loại bút, độ dày, tốc độ và độ mềm. Cỡ bút hiển thị và độ dày nét là hai thông số độc lập.
+3. Trong **Bút & nét**, chọn loại bút, độ dày, tốc độ và độ mềm. Trong **Bàn tay**, chọn chỉ hiện bút, tay phải cầm bút hoặc tay trái cầm bút, màu da và kích thước tay **50–200%** bằng thanh kéo hoặc nhập số. Cỡ tay, cỡ bút hiển thị và độ dày nét được chỉnh riêng.
 4. Trong **Chủ thể & chữ**, chọn tách chủ thể bằng AI, theo vùng trung tâm hoặc tắt; chọn thứ tự vẽ. Có thể bật/tắt nhận diện chữ và ưu tiên khuôn mặt.
 5. Bấm **Xem vùng** để kiểm tra: xanh lá = chủ thể, vàng = chữ, xanh dương = khuôn mặt. Bấm **Xem tranh** để xem kết quả hoặc **Vẽ thử 6s** để xem thứ tự nét trên bản xem trước giảm kích thước.
 6. Chọn thư mục, bật ghép nếu cần và bấm **Xuất MP4**. Chờ thông báo **Đã xuất**; 100% khung hình vẫn cần bước hoàn tất MP4.
@@ -31,12 +31,15 @@
 | Ưu tiên chữ | Mô hình PP-OCR phát hiện vùng chữ; đường nét bám ảnh chữ gốc, không thay nội dung bằng font khác |
 | Chọn thứ tự | Chủ thể → nền → chữ; chủ thể → chữ → nền; chữ → chủ thể → nền; nền → chủ thể → chữ; hoặc không chia vùng |
 | Loại bút | 2H, HB, 2B, 6B, than chì; mỗi loại thay đổi độ đậm, độ rộng và hạt giấy |
+| Tay cầm bút | Tay phải/tay trái dạng minh họa vector tích hợp, ba màu da; phóng to 50–200% quanh điểm cầm, đầu bút bám theo nét |
 | Kích thước và tốc độ | Cỡ hình bút 20–200; nét 0,4–6; tốc độ bút 0,25–4×; tốc độ đánh bóng 0,5–6× |
 | Điện ảnh | Zoom chậm liên tục hướng về chủ thể, tối viền nhẹ, giấy có hạt, chuyển cảnh mềm giữa các ảnh được ghép |
 | Hàng loạt | Xuất riêng từng ảnh hoặc ghép thành một MP4; giữ video đã hoàn tất nếu ảnh sau bị lỗi |
 | Chạy độc lập | Bản Windows portable đóng gói thư viện, mô hình và encoder, không cần Python trên máy nhận |
 
 Các nét được tái dựng từ ảnh bằng thị giác máy tính, không phải ghi lại nét vẽ của một họa sĩ. Chữ được dò vị trí và vẽ lại theo hình dạng pixel; chương trình không đọc hiểu nội dung chữ hay mô phỏng chính xác thứ tự viết tay của từng ký tự.
+
+Bàn tay là hình minh họa có ngón tay đặt trước/sau thân bút, không phải video bàn tay thật. Tay/bút chỉ xuất hiện trong lúc vẽ và ẩn khi tranh hoàn tất. Dùng **Vẽ thử 6s** để xem bàn tay chuyển động; **Xem tranh** chỉ hiển thị kết quả cuối. Tay lớn có thể che nhiều chi tiết đang vẽ hoặc nằm một phần ngoài khung; giảm cỡ tay nếu cần. Cấu hình cũ mặc định vẫn chỉ hiện bút.
 
 ## Preset mạng xã hội
 
@@ -79,6 +82,14 @@ Chạy không phân vùng AI/chữ:
 ```bash
 python pencil_video_studio.py --headless "anh.png" --subject-detection center --no-text --duration 20 --camera 0 --output videos
 ```
+
+Thêm tay phải cầm bút, cỡ 125%, màu da trung bình:
+
+```bash
+python pencil_video_studio.py --headless "anh.png" --tool-style right_hand --hand-size 125 --skin-tone medium --output videos
+```
+
+`--tool-style left_hand` chọn tay trái; `--no-pencil` ẩn cả tay và bút. Tất cả chế độ tay đã nằm sẵn trong ứng dụng, không cần tải thêm tài nguyên.
 
 `--size` ghi đè độ phân giải preset; `--duration 0` dùng thời gian tự động. Xem toàn bộ tùy chọn bằng `--help`. `--config` chỉ định tệp cấu hình giao diện; chế độ headless dùng các đối số dòng lệnh. Mã thoát: 0 thành công, 1 lỗi, 130 hủy. Ctrl+C yêu cầu dừng và dọn encoder.
 

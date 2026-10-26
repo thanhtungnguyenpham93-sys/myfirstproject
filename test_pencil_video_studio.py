@@ -276,6 +276,26 @@ class StudioTests(unittest.TestCase):
                     self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                          root.winfo_rooty() + root.winfo_height())
 
+    @unittest.skipUnless(studio.tk is not None and (os.name == "nt" or os.environ.get("DISPLAY")), "Cần màn hình")
+    def test_hand_controls_reach_render_configuration(self):
+        root = studio.tk.Tk()
+        self.addCleanup(root.destroy)
+        app = studio.App(root, self.root / "gui.json")
+        root.geometry("900x700")
+        app.tabs.select(1)
+        app.settings_tabs.select(2)
+        app.v["tool_style"].set("Tay trái cầm bút")
+        app.v["skin_tone"].set("Da sẫm")
+        app.v["hand_size"].set("135")
+        root.update()
+        cfg = app.get_cfg()
+        self.assertEqual((cfg.tool_style, cfg.skin_tone, cfg.hand_size), ("left_hand", "dark", 135))
+        for widget, _ in app.controls:
+            variable = str(widget.cget("textvariable")) if "textvariable" in widget.keys() else ""
+            if variable == str(app.v["hand_size"]):
+                self.assertTrue(widget.winfo_ismapped())
+                self.assertLess(widget.winfo_rooty() + widget.winfo_height(), root.winfo_rooty() + root.winfo_height())
+
 
 if __name__ == "__main__":
     unittest.main()

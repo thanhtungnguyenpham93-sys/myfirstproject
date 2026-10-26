@@ -14,6 +14,7 @@ import numpy as np
 from PIL import Image
 
 from model_assets import model_path, verify_model
+from drawing_tools import draw_writing_tool
 
 cv2.setNumThreads(2)
 
@@ -442,22 +443,4 @@ class StrokeRenderer:
         return Image.fromarray(frame)
 
     def _draw_pencil(self, frame, position, time_fraction):
-        size = self.cfg.pen_size * min(self.width, self.height) / 720
-        angle = -math.pi / 3 + math.sin(time_fraction * 7) * 0.05 * self.cfg.smoothness
-        direction = np.array([math.cos(angle), math.sin(angle)])
-        normal = np.array([-direction[1], direction[0]])
-        tip = np.asarray(position, np.float64)
-        base = tip + direction * size * 0.22
-        end = tip + direction * size
-        radius = size * 0.055
-        body = np.rint([base + normal * radius, end + normal * radius, end - normal * radius,
-                         base - normal * radius]).astype(np.int32)
-        wood = np.rint([tip, base + normal * radius, base - normal * radius]).astype(np.int32)
-        # RGB palette; same pen family selected by the user controls its appearance.
-        palette = {"2h": (124, 158, 180), "hb": (213, 170, 65), "2b": (65, 102, 76),
-                   "6b": (60, 70, 88), "charcoal": (55, 52, 49)}
-        cv2.fillConvexPoly(frame, body + (2, 3), (190, 186, 180), cv2.LINE_AA)
-        cv2.fillConvexPoly(frame, body, palette[self.cfg.pencil_type], cv2.LINE_AA)
-        cv2.fillConvexPoly(frame, wood, (212, 177, 139), cv2.LINE_AA)
-        cv2.line(frame, tuple(np.rint(tip).astype(int)), tuple(np.rint(tip + direction * size * 0.06).astype(int)),
-                 (45, 43, 41), max(1, round(radius * 0.6)), cv2.LINE_AA)
+        draw_writing_tool(frame, position, time_fraction, self.cfg)

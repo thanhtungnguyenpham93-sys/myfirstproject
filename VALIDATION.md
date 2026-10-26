@@ -1,12 +1,15 @@
-# Validation — version 3
+# Validation — version 3.1
 
 Source validation includes actual U²-Net subject inference, actual PP-OCR text-region
 detection, contour/hatching rendering, semantic order tests, MP4 encoding and decoding,
 error handling and Tkinter GUI checks on Linux with Xvfb.
 
-31 tests passed in the Linux run with a display, including model tests. The small
-packaging self-test passed: one text region detected, 294 strokes planned, 8 frames
-encoded and decoded at 384 × 288. An additional portrait/text image produced one
+40 tests passed in the Linux run with a display, including model tests and new hand
+tests: nib anchoring during resizing, mirrored left/right poses, three skin palettes,
+edge clipping, hidden overlays, unchanged final artwork, config migration and GUI controls.
+The packaging self-test encodes and decodes three videos (pencil, right hand, left hand),
+8 frames each at 384 × 288, with real subject and text detection.
+An additional portrait/text image produced one
 face and one text region and was inspected visually for region placement.
 
 The Windows CI workflow independently tests the source, builds with PyInstaller,

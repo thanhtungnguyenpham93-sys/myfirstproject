@@ -1,8 +1,14 @@
-# Pencil Video Studio 3 — Windows 10/11 x64
+# Pencil Video Studio 3.1 — Windows 10/11 x64
 
 Download **PencilVideoStudio-Windows-x64.zip**, extract the entire archive, then
 open **PencilVideoStudio/PencilVideoStudio.exe**. Keep its `_internal` folder.
 No Python or separate FFmpeg installation is required for the portable package.
+
+New in 3.1: select **pencil only**, an illustrated **right hand**, or an illustrated
+**left hand** holding the pencil. Adjust hand size from **50% to 200%** independently
+of pencil size and line thickness, and choose among three skin tones.
+Open **Thiết lập vẽ → Bàn tay**; use **Vẽ thử 6s** to preview the moving hand.
+The hand follows the drawing tip and disappears when the picture is complete.
 
 This version traces smooth image contours and curved hatching, runs local subject
 segmentation and text-region detection, supports subject/background/text ordering,
