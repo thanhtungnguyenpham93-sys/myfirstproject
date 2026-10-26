@@ -40,7 +40,7 @@ except ImportError:
     tk = None
 
 APP_NAME = "Pencil Video Studio"
-VERSION = "3.2.0"
+VERSION = "3.2.1"
 TOOL_CHOICES = {**TOOL_STYLES, "Ẩn bút và bàn tay": None}
 LOG = logging.getLogger(__name__)
 MAX_FILES = 200
@@ -1026,7 +1026,7 @@ def self_test(output):
         frames = np.frombuffer(decoded.stdout, np.uint8).reshape(len(checks), 720, 720, 3)
         sizes_preview = Image.new("RGB", (1080, 780), "white")
         for index, (current, t) in enumerate(checks):
-            _, length, _, direction, _, _ = tool_geometry(720, 720, t, current)
+            _, length, _, direction, _, _ = tool_geometry(720, 720, t, current, (360, 430))
             for fraction in (0.18, 0.75):
                 x, y = np.rint(np.array([360, 430]) + direction*length*fraction).astype(int)
                 patch = frames[index, y-2:y+3, x-2:x+3].astype(int)

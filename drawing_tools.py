@@ -43,7 +43,7 @@ def hand_texture(skin_tone):
     return cv2.resize(rgba, (512, 512), interpolation=cv2.INTER_AREA)
 
 
-def tool_geometry(width, height, time_fraction, cfg):
+def tool_geometry(width, height, time_fraction, cfg, position=None):
     """Keep sufficient shaft on BOTH sides of the grip, including at 200% hand."""
     resolution_scale = min(width, height) / 720
     hand_unit = 60 * cfg.hand_size / 100 * resolution_scale
@@ -63,6 +63,25 @@ def tool_geometry(width, height, time_fraction, cfg):
         direction[0] *= -1
         normal[0] *= -1
         rotation[0] *= -1
+    if hand and position is not None:
+        # Near the border, turn the whole grip toward the page interior. Moving
+        # the nib would detach it from the drawing; rotating around it preserves
+        # contact while keeping the shaft from disappearing above the top edge.
+        px, py = position
+        distance = max(0, min(px, py, width-1-px, height-1-py))
+        weight = np.clip(1 - distance / max(length, 1), 0, 1)
+        weight = weight * weight * (3-2*weight)
+        inward = np.array([width/2-px, height/2-py])
+        if weight > 0 and np.linalg.norm(inward) > 1:
+            # The hand and pencil occupy a roughly 60-degree wedge. Aim the
+            # middle of that wedge inward, so both fit at the image corners.
+            spread = -math.pi/6 if cfg.tool_style == "left_hand" else math.pi/6
+            mean_angle = math.atan2(direction[1], direction[0]) + spread
+            delta = math.atan2(inward[1], inward[0]) - mean_angle
+            delta = math.atan2(math.sin(delta), math.cos(delta)) * weight
+            turn = np.array([[math.cos(delta), -math.sin(delta)],
+                             [math.sin(delta), math.cos(delta)]])
+            direction, normal, rotation = turn @ direction, turn @ normal, turn @ rotation
     # Narrow shaft independent of total length; a long pencil must not be a club.
     radius = max(1.2 * resolution_scale, min(length * 0.028, hand_unit * 0.085)) if hand else length * 0.04
     return hand_unit, length, radius, direction, normal, rotation
@@ -73,7 +92,7 @@ def draw_writing_tool(frame, position, time_fraction, cfg):
         return
     height, width = frame.shape[:2]
     resolution_scale = min(width, height) / 720
-    unit, length, radius, direction, normal, rotation = tool_geometry(width, height, time_fraction, cfg)
+    unit, length, radius, direction, normal, rotation = tool_geometry(width, height, time_fraction, cfg, position)
     tip = np.asarray(position, np.float64)
     hand = cfg.tool_style != "pencil"
     grip = tip + direction * length * 0.30

@@ -1,4 +1,4 @@
-# Pencil Video Studio 3.2 — Windows 10/11 x64
+# Pencil Video Studio 3.2.1 — Windows 10/11 x64
 
 Download **PencilVideoStudio-Windows-x64.zip**, extract the entire archive into a new
 folder, and open **PencilVideoStudio/PencilVideoStudio.exe**. Keep `_internal`.
@@ -8,6 +8,8 @@ This release fixes the oversized hand hiding the pencil. It replaces the cartoon
 fist with a smaller, realistic-looking generated hand sprite in a relaxed writing grip.
 The wrist fades softly at its edge. A separate shaded pencil is composited through
 the fingers, with visible shaft before and after the grip and a sharp graphite tip.
+Near image edges, the tool rotates toward the page interior around the fixed nib,
+keeping the pencil from disappearing beyond the top edge.
 Hand size now sets a minimum proportional pencil length: even 200% hand with a 20px
 pencil preference keeps the pencil visible. Line thickness is still independent.
 

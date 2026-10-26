@@ -70,7 +70,7 @@ class HandTests(unittest.TestCase):
                             canvas = np.full((720, 720, 3), 255, np.uint8)
                             tip = np.array([360, 430])
                             draw_writing_tool(canvas, tip, 0.4, cfg)
-                            _, length, _, direction, _, _ = tool_geometry(720, 720, 0.4, cfg)
+                            _, length, _, direction, _, _ = tool_geometry(720, 720, 0.4, cfg, tip)
                             color = np.array(PEN_COLORS[pencil])
                             for fraction in (0.18, 0.75):
                                 x, y = np.rint(tip + direction * length * fraction).astype(int)
@@ -85,6 +85,18 @@ class HandTests(unittest.TestCase):
             self.assertLess(int(picture[230, 300].max()), 80)
         for picture in pictures[1:]:
             self.assertGreater(np.count_nonzero(np.any(picture != pictures[0], axis=2)), 500)
+
+    def test_pencil_remains_visible_at_corners_and_edges(self):
+        for style in ("left_hand", "right_hand"):
+            for tip in ((0, 0), (719, 0), (719, 719), (0, 719),
+                        (360, 0), (360, 719), (0, 360), (719, 360)):
+                with self.subTest(style=style, tip=tip):
+                    cfg = replace(self.cfg, tool_style=style, hand_size=200, pen_size=20)
+                    frame = np.full((720, 720, 3), 255, np.uint8)
+                    draw_writing_tool(frame, tip, 0.4, cfg)
+                    colored = np.max(np.abs(frame.astype(int) - PEN_COLORS["hb"]), axis=2) < 18
+                    self.assertGreater(colored.sum(), 300, "Bút nằm ngoài khung ở mép ảnh")
+                    self.assertLess(int(frame[tip[1], tip[0]].max()), 80)
 
     def test_settings_roundtrip_and_old_version_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
