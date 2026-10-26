@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 
-from drawing_tools import draw_writing_tool
+from drawing_tools import draw_writing_tool, tool_geometry, PEN_COLORS
 from pencil_video_studio import RenderConfig, save_settings, load_settings
 import test_drawing_engine as fixtures
 
@@ -56,6 +56,35 @@ class HandTests(unittest.TestCase):
                 canvas = np.full((48, 64, 3), 255, np.uint8)
                 draw_writing_tool(canvas, tip, 0.4, replace(self.cfg, tool_style=style, hand_size=200))
                 self.assertEqual(canvas.shape, (48, 64, 3))
+
+    def test_large_hand_small_pencil_keeps_both_shaft_sections_visible(self):
+        # User regression: hand at 200% swallowed a pencil set to 20px. Check
+        # actual colored pixels on BOTH sides of the fingers, not just the nib.
+        for style in ("right_hand", "left_hand"):
+            for size in (50, 100, 200):
+                for pen_size in (20, 95, 200):
+                    for pencil in PEN_COLORS:
+                        with self.subTest(style=style, size=size, pen=pen_size, pencil=pencil):
+                            cfg = replace(self.cfg, tool_style=style, hand_size=size,
+                                          pen_size=pen_size, pencil_type=pencil)
+                            canvas = np.full((720, 720, 3), 255, np.uint8)
+                            tip = np.array([360, 430])
+                            draw_writing_tool(canvas, tip, 0.4, cfg)
+                            _, length, _, direction, _, _ = tool_geometry(720, 720, 0.4, cfg)
+                            color = np.array(PEN_COLORS[pencil])
+                            for fraction in (0.18, 0.75):
+                                x, y = np.rint(tip + direction * length * fraction).astype(int)
+                                pixels = canvas[y-2:y+3, x-2:x+3].astype(int)
+                                distance = np.max(np.abs(pixels - color), axis=2)
+                                self.assertLess(distance.min(), 18, "Bàn tay che mất thân bút")
+
+    def test_skin_tones_keep_shaft_and_nib_visible(self):
+        pictures = [self.draw(skin_tone=tone, hand_size=200, pen_size=20)
+                    for tone in ("light", "medium", "dark")]
+        for picture in pictures:
+            self.assertLess(int(picture[230, 300].max()), 80)
+        for picture in pictures[1:]:
+            self.assertGreater(np.count_nonzero(np.any(picture != pictures[0], axis=2)), 500)
 
     def test_settings_roundtrip_and_old_version_defaults(self):
         with tempfile.TemporaryDirectory() as directory:

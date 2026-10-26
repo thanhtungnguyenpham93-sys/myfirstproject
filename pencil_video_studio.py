@@ -29,7 +29,7 @@ try:
     import numpy as np
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
     from drawing_engine import StrokeRenderer, PENCILS, PRIORITIES, DETECTORS
-    from drawing_tools import TOOL_STYLES, SKIN_TONES, draw_writing_tool
+    from drawing_tools import TOOL_STYLES, SKIN_TONES, PEN_COLORS, draw_writing_tool, tool_geometry
 except ImportError as exc:
     raise SystemExit("Thiếu thư viện. Chạy Setup-Windows.bat hoặc python -m pip install -r requirements.txt") from exc
 
@@ -40,7 +40,7 @@ except ImportError:
     tk = None
 
 APP_NAME = "Pencil Video Studio"
-VERSION = "3.1.1"
+VERSION = "3.2.0"
 TOOL_CHOICES = {**TOOL_STYLES, "Ẩn bút và bàn tay": None}
 LOG = logging.getLogger(__name__)
 MAX_FILES = 200
@@ -613,7 +613,7 @@ class App:
             self.controls.append((checkbox, "normal"))
         self.tool_preview = ttk.Label(pages["hand"], compound="top", anchor="center")
         self.tool_preview.grid(row=4, column=0, columnspan=2, sticky="ew", pady=4)
-        ttk.Label(pages["hand"], text="Vẽ thử 6s: có tay/bút. Xem tranh: tranh cuối.",
+        ttk.Label(pages["hand"], text="Bút tự tăng cỡ theo tay để không bị che.\nVẽ thử 6s: có tay/bút. Xem tranh: tranh cuối.",
                   wraplength=390).grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
         for key in ("tool_style", "hand_size", "skin_tone", "pen_size", "pencil_type"):
             self.v[key].trace_add("write", self.update_tool_preview)
@@ -788,11 +788,16 @@ class App:
         except (ValueError, KeyError, tk.TclError):
             self.tool_preview.configure(image="", text="Nhập cỡ tay 50–200%, cỡ bút 20–200.")
             return
-        # Render at a consistent scale, then crop a swatch around the contact point.
+        # Render the same proportions as video, including the minimum shaft size.
         canvas = np.full((720, 720, 3), (248, 245, 237), np.uint8)
-        draw_writing_tool(canvas, (360, 300), 0.4, cfg)
-        swatch = Image.fromarray(canvas[80:580, 20:700])
-        swatch.thumbnail((250, 100), Image.Resampling.LANCZOS)
+        draw_writing_tool(canvas, (360, 410), 0.4, cfg)
+        # Center the preview on the tool bounds; enough room for the long shaft
+        # at 200%, and a clear view of both fingers and pencil at default size.
+        changed = np.any(canvas != (248, 245, 237), axis=2)
+        ys, xs = np.where(changed)
+        box = (max(0, xs.min()-12), max(0, ys.min()-12), min(720, xs.max()+13), min(720, ys.max()+13)) if len(xs) else (200, 250, 520, 570)
+        swatch = Image.fromarray(canvas).crop(box)
+        swatch.thumbnail((240, 85), Image.Resampling.LANCZOS)
         self.tool_photo = self.ImageTk.PhotoImage(swatch)
         self.tool_preview.configure(image=self.tool_photo, text=f"Video: {self.v['tool_style'].get()}")
 
@@ -998,10 +1003,47 @@ def self_test(output):
                     raise RuntimeError(f"Video không hiển thị bàn tay đã chọn: {style}.")
                 hand_pixels[style] = visible_pixels
         comparison.save(folder / "Hand-preview.png")
+        # Verify actual encoded pencil pixels at the hand-size extremes, not
+        # merely that a hand asset exists or that the encoder returned success.
+        tool_cfg = replace(cfg, width=720, height=720, hand_size=200, pen_size=20)
+        tool_video = folder / "Hand-size-check.mp4"
+        checks = []
+        with VideoWriter(tool_video, tool_cfg, find_ffmpeg(), cancel) as writer:
+            for style in ("right_hand", "left_hand"):
+                for size in (50, 100, 200):
+                    current = replace(tool_cfg, tool_style=style, hand_size=size)
+                    for t in (0.2, 0.6):
+                        pixels = np.full((720, 720, 3), 255, np.uint8)
+                        draw_writing_tool(pixels, (360, 430), t, current)
+                        writer.write(Image.fromarray(pixels))
+                        checks.append((current, t))
+            writer.finish()
+        decoded = subprocess.run([find_ffmpeg(), "-v", "error", "-i", str(tool_video), "-f", "rawvideo",
+                                  "-pix_fmt", "rgb24", "pipe:1"], capture_output=True, timeout=60,
+                                  **subprocess_options())
+        if decoded.returncode or len(decoded.stdout) != len(checks)*720*720*3:
+            raise RuntimeError("Không giải mã được video kiểm tra kích thước tay/bút.")
+        frames = np.frombuffer(decoded.stdout, np.uint8).reshape(len(checks), 720, 720, 3)
+        sizes_preview = Image.new("RGB", (1080, 780), "white")
+        for index, (current, t) in enumerate(checks):
+            _, length, _, direction, _, _ = tool_geometry(720, 720, t, current)
+            for fraction in (0.18, 0.75):
+                x, y = np.rint(np.array([360, 430]) + direction*length*fraction).astype(int)
+                patch = frames[index, y-2:y+3, x-2:x+3].astype(int)
+                if np.max(np.abs(patch - PEN_COLORS[current.pencil_type]), axis=2).min() > 35:
+                    raise RuntimeError(f"Bàn tay che mất thân bút trong MP4: {current.tool_style}, {current.hand_size}%.")
+            if index % 2 == 0:
+                tile = index // 2
+                x0, y0 = (tile % 3)*360, (tile // 3)*390
+                sizes_preview.paste(Image.fromarray(frames[index]).resize((360, 360), Image.Resampling.LANCZOS), (x0, y0+30))
+                ImageDraw.Draw(sizes_preview).text((x0+8, y0+8), f"{current.tool_style} | {current.hand_size}% | pen 20",
+                                                   fill="black", font=ImageFont.load_default(size=17))
+        sizes_preview.save(folder / "Hand-sizes.png")
         result = {"status": "passed", "version": VERSION, "frames": cfg.frame_count,
                   "strokes": len(renderer.strokes), "text_regions": len(renderer.regions.text_boxes),
                   "subject_model": "u2netp", "ffmpeg": find_ffmpeg(), "tool_styles": list(TOOL_STYLES.values()),
-                  "visible_hand_pixels": hand_pixels, "videos": outputs}
+                  "visible_hand_pixels": hand_pixels, "visible_shaft_checks": len(checks)*2,
+                  "hand_size_video": str(tool_video), "videos": outputs}
         (folder / "self-test.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         return 0
     except Exception:

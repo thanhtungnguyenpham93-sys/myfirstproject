@@ -1,12 +1,15 @@
-# Validation — version 3.1.1
+# Validation — version 3.2
 
 Source validation includes actual U²-Net subject inference, actual PP-OCR text-region
 detection, contour/hatching rendering, semantic order tests, MP4 encoding and decoding,
 error handling and Tkinter GUI checks on Linux with Xvfb.
 
-41 tests passed in the Linux run with a display, including model tests and new hand
+43 tests passed in the Linux run with a display, including model tests and new hand
 tests: nib anchoring during resizing, mirrored left/right poses, three skin palettes,
 edge clipping, hidden overlays, unchanged final artwork, config migration and GUI controls.
+New regression tests inspect actual shaft pixels before/after the fingers for both
+hands, sizes 50/100/200, pen preferences 20/95/200 and all five pencil types.
+Skin tones and exact nib contact are also checked with the largest hand/smallest pen.
 The packaging self-test encodes and decodes three videos (pencil, right hand, left hand),
 8 frames each at 384 × 288, with real subject and text detection.
 It compares decoded hand frames with pencil-only frames and requires visible differences
@@ -14,6 +17,10 @@ beyond compression noise; this catches a hand selection silently rendering as pe
 A GUI test starts from saved hidden overlays, clicks each tool option, exports MP4s,
 then checks the decoded videos for both hands. Hand-preview.png is a side-by-side
 sample decoded from the three test videos.
+The packaged self-test additionally encodes a 12-frame 720×720 MP4 and performs
+24 shaft visibility checks on decoded frames across both hands, all three sizes and
+two wrist poses. Hand-sizes.png is decoded from this MP4. The bundled generated
+PNG sprite is loaded by this test, so missing assets cause the build to fail.
 An additional portrait/text image produced one
 face and one text region and was inspected visually for region placement.
 

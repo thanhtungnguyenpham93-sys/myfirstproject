@@ -18,3 +18,7 @@ license terms and copyright notices continue to apply.
 - PyInstaller bootloader: https://pyinstaller.org/en/stable/license.html (GPL with distribution exception).
 
 No third-party photo, font, song or personal image is included in the application package.
+
+The bundled `assets/writing_hand.png` is an AI-generated transparent hand asset
+created for this application. It is not a stock photograph or an image of a user.
+The procedural pencil and skin-tone compositing are implemented in drawing_tools.py.

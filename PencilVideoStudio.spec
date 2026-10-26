@@ -9,7 +9,7 @@ for package in ('rapidocr_onnxruntime', 'onnxruntime', 'imageio_ffmpeg'):
     binaries += package_bins
     hiddenimports += package_imports
 datas += collect_data_files('cv2', includes=['data/*.xml'])
-datas += [('models/u2netp.onnx', 'models'), ('THIRD_PARTY.md', '.')]
+datas += [('models/u2netp.onnx', 'models'), ('assets/writing_hand.png', 'assets'), ('THIRD_PARTY.md', '.')]
 
 a = Analysis(['pencil_video_studio.py'], pathex=[], binaries=binaries, datas=datas,
              hiddenimports=hiddenimports, hookspath=[], hooksconfig={}, runtime_hooks=[],
