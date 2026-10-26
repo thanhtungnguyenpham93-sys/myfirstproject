@@ -296,6 +296,45 @@ class StudioTests(unittest.TestCase):
                 self.assertTrue(widget.winfo_ismapped())
                 self.assertLess(widget.winfo_rooty() + widget.winfo_height(), root.winfo_rooty() + root.winfo_height())
 
+    @unittest.skipUnless(studio.tk is not None and (os.name == "nt" or os.environ.get("DISPLAY")), "Cần màn hình")
+    def test_select_hand_after_hidden_setting_exports_visible_hand(self):
+        root = studio.tk.Tk()
+        self.addCleanup(root.destroy)
+        settings = self.root / "hand-gui.json"
+        studio.save_settings(settings, self.cfg, [str(self.image)], str(self.root / "videos"))
+        with patch.dict(studio.PRESETS, {"Kiểm thử": (320, 240)}), \
+             patch.object(studio.messagebox, "showinfo"), patch.object(studio.messagebox, "showerror") as errors:
+            app = studio.App(root, settings)
+            self.assertEqual(app.v["tool_style"].get(), "Ẩn bút và bàn tay")
+            self.assertFalse(app.get_cfg().show_pencil)
+            app.v["preset"].set("Kiểm thử")
+            app.v["duration"].set("0.8")
+            app.v["hand_size"].set("135")
+            videos = {}
+            for label in studio.TOOL_STYLES:
+                # Exercise the actual click -> configuration -> worker -> encoder path.
+                app.tool_buttons[label].invoke()
+                root.update()
+                self.assertIn(label, app.tool_preview.cget("text"))
+                cfg = app.get_cfg()
+                self.assertTrue(cfg.show_pencil)
+                app.start()
+                self.pump_gui(root, app)
+                errors.assert_not_called()
+                self.assertEqual(len(app.outputs), 1)
+                self.assertEqual(studio.load_settings(settings)[0].tool_style, studio.TOOL_STYLES[label])
+                decoded = subprocess.run([studio.find_ffmpeg(), "-v", "error", "-i", app.outputs[0],
+                                          "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+                                         capture_output=True, timeout=30, **studio.subprocess_options())
+                self.assertEqual(decoded.returncode, 0)
+                videos[studio.TOOL_STYLES[label]] = np.frombuffer(decoded.stdout, np.uint8).reshape(
+                    cfg.frame_count, cfg.height, cfg.width, 3).astype(np.int16)
+            for style in ("right_hand", "left_hand"):
+                changed = np.max(np.abs(videos[style] - videos["pencil"]), axis=3) > 40
+                self.assertGreater(changed[1:cfg.draw_frames - 1].sum(axis=(1, 2)).max(), 300)
+            app.tool_buttons["Ẩn bút và bàn tay"].invoke()
+            self.assertFalse(app.get_cfg().show_pencil)
+
 
 if __name__ == "__main__":
     unittest.main()

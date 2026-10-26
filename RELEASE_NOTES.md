@@ -1,10 +1,17 @@
-# Pencil Video Studio 3.1 — Windows 10/11 x64
+# Pencil Video Studio 3.1.1 — Windows 10/11 x64
 
 Download **PencilVideoStudio-Windows-x64.zip**, extract the entire archive, then
 open **PencilVideoStudio/PencilVideoStudio.exe**. Keep its `_internal` folder.
 No Python or separate FFmpeg installation is required for the portable package.
 
-New in 3.1: select **pencil only**, an illustrated **right hand**, or an illustrated
+Fixed in 3.1.1: replaced the ambiguous “show pencil / hand” checkbox with four
+explicit choices: pencil only, right hand, left hand, or hidden. Selecting a hand
+always enables it. A live tool swatch shows the selected style and size immediately.
+A new GUI-to-MP4 test checks that both hands survive export. The packaged EXE
+self-test now checks visible hand pixels in decoded MP4s, not just successful encoding.
+**Hand-preview.png** shows actual frames decoded from the packaged EXE test videos.
+
+Available since 3.1: select **pencil only**, an illustrated **right hand**, or an illustrated
 **left hand** holding the pencil. Adjust hand size from **50% to 200%** independently
 of pencil size and line thickness, and choose among three skin tones.
 Open **Thiết lập vẽ → Bàn tay**; use **Vẽ thử 6s** to preview the moving hand.

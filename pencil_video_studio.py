@@ -29,7 +29,7 @@ try:
     import numpy as np
     from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
     from drawing_engine import StrokeRenderer, PENCILS, PRIORITIES, DETECTORS
-    from drawing_tools import TOOL_STYLES, SKIN_TONES
+    from drawing_tools import TOOL_STYLES, SKIN_TONES, draw_writing_tool
 except ImportError as exc:
     raise SystemExit("Thiếu thư viện. Chạy Setup-Windows.bat hoặc python -m pip install -r requirements.txt") from exc
 
@@ -40,7 +40,8 @@ except ImportError:
     tk = None
 
 APP_NAME = "Pencil Video Studio"
-VERSION = "3.1.0"
+VERSION = "3.1.1"
+TOOL_CHOICES = {**TOOL_STYLES, "Ẩn bút và bàn tay": None}
 LOG = logging.getLogger(__name__)
 MAX_FILES = 200
 Image.MAX_IMAGE_PIXELS = 40_000_000
@@ -560,8 +561,18 @@ class App:
         self._combo(pages["video"], 0, "Nền tảng / khung", "preset", PRESETS, preset).bind("<<ComboboxSelected>>", self.apply_preset)
         self._combo(pages["video"], 1, "Căn ảnh", "fit", FITS, next(k for k,v in FITS.items() if v == cfg.fit))
         self._combo(pages["pencil"], 0, "Loại bút", "pencil_type", PENCILS, next(k for k,v in PENCILS.items() if v == cfg.pencil_type))
-        self._combo(pages["hand"], 0, "Kiểu hiển thị", "tool_style", TOOL_STYLES,
-                    next(k for k,v in TOOL_STYLES.items() if v == cfg.tool_style))
+        # One explicit choice controls both visibility and tool type. A separate
+        # visibility checkbox used to look like it enabled a hand on its own.
+        self.v["tool_style"] = tk.StringVar(value=next(
+            k for k, v in TOOL_CHOICES.items() if v == (cfg.tool_style if cfg.show_pencil else None)))
+        tool_box = ttk.LabelFrame(pages["hand"], text="Hiển thị trong video", padding=4)
+        tool_box.grid(row=0, column=0, columnspan=2, sticky="ew", pady=(0, 6))
+        self.tool_buttons = {}
+        for index, label in enumerate(TOOL_CHOICES):
+            button = ttk.Radiobutton(tool_box, text=label, variable=self.v["tool_style"], value=label)
+            button.grid(row=index // 2, column=index % 2, sticky="w", padx=4, pady=2)
+            self.controls.append((button, "normal"))
+            self.tool_buttons[label] = button
         self._combo(pages["hand"], 1, "Màu da", "skin_tone", SKIN_TONES,
                     next(k for k,v in SKIN_TONES.items() if v == cfg.skin_tone))
         self._combo(pages["regions"], 0, "Tách chủ thể", "subject_detection", DETECTORS,
@@ -593,7 +604,6 @@ class App:
         self.controls.append((hand_scale, "normal"))
         checks = (("video", 5, "Chừa vùng an toàn theo nền tảng", "safe_margin"),
                   ("video", 6, "Ghép tất cả ảnh thành một video", "merge"),
-                  ("hand", 4, "Hiện bút / bàn tay khi đang vẽ", "show_pencil"),
                   ("regions", 2, "Tự nhận diện và tách vùng chữ", "detect_text"),
                   ("regions", 3, "Ưu tiên chi tiết khuôn mặt", "face_priority"))
         for page, row, label, key in checks:
@@ -601,10 +611,13 @@ class App:
             checkbox = ttk.Checkbutton(pages[page], text=label, variable=self.v[key])
             checkbox.grid(row=row, column=0, columnspan=2, sticky="w", pady=6)
             self.controls.append((checkbox, "normal"))
-        ttk.Label(pages["hand"], text="Chọn tay phải hoặc tay trái để thấy bàn tay minh họa cầm bút. "
-                  "Cỡ tay điều chỉnh riêng, không đổi độ dày nét. Đầu bút luôn bám theo nét đang vẽ. "
-                  "Bấm Vẽ thử 6s để xem chuyển động; Xem tranh là tranh hoàn thiện nên không hiện bàn tay.",
-                  wraplength=390).grid(row=5, column=0, columnspan=2, sticky="w", pady=14)
+        self.tool_preview = ttk.Label(pages["hand"], compound="top", anchor="center")
+        self.tool_preview.grid(row=4, column=0, columnspan=2, sticky="ew", pady=4)
+        ttk.Label(pages["hand"], text="Vẽ thử 6s: có tay/bút. Xem tranh: tranh cuối.",
+                  wraplength=390).grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
+        for key in ("tool_style", "hand_size", "skin_tone", "pen_size", "pencil_type"):
+            self.v[key].trace_add("write", self.update_tool_preview)
+        self.update_tool_preview()
         ttk.Label(pages["regions"], text="Xem vùng trước khi xuất: xanh lá = chủ thể, vàng = chữ, xanh dương = khuôn mặt. "
                   "AI có thể nhầm trên ảnh phức tạp; bạn có thể đổi chế độ và thứ tự vẽ.",
                   wraplength=390).grid(row=4, column=0, columnspan=2, sticky="w", pady=14)
@@ -750,15 +763,38 @@ class App:
             for key in ("duration", "hold", "contrast", "softness", "texture", "pen_size", "line_width",
                         "pen_speed", "fill_speed", "detail", "smoothness", "camera", "vignette", "transition", "hand_size"):
                 values[key] = float(self.v[key].get())
-            for key in ("safe_margin", "show_pencil", "merge", "detect_text", "face_priority"):
+            for key in ("safe_margin", "merge", "detect_text", "face_priority"):
                 values[key] = self.v[key].get()
             for key, mapping in (("fit", FITS), ("effect", EFFECTS), ("pencil_type", PENCILS),
                                  ("priority", PRIORITIES), ("subject_detection", DETECTORS),
-                                 ("tool_style", TOOL_STYLES), ("skin_tone", SKIN_TONES)):
+                                 ("skin_tone", SKIN_TONES)):
                 values[key] = mapping[self.v[key].get()]
+            selected_tool = TOOL_CHOICES[self.v["tool_style"].get()]
+            values.update(tool_style=selected_tool or "pencil", show_pencil=selected_tool is not None)
             return RenderConfig(**values).validate()
         except (ValueError, KeyError, tk.TclError) as exc:
             raise ValueError(f"Thông số không hợp lệ: {exc}") from exc
+
+    def update_tool_preview(self, *args):
+        """Show the selected overlay immediately, without requiring an input image."""
+        try:
+            selected_tool = TOOL_CHOICES[self.v["tool_style"].get()]
+            cfg = replace(RenderConfig(), tool_style=selected_tool or "pencil",
+                          show_pencil=selected_tool is not None,
+                          hand_size=float(self.v["hand_size"].get()),
+                          pen_size=float(self.v["pen_size"].get()),
+                          skin_tone=SKIN_TONES[self.v["skin_tone"].get()],
+                          pencil_type=PENCILS[self.v["pencil_type"].get()]).validate()
+        except (ValueError, KeyError, tk.TclError):
+            self.tool_preview.configure(image="", text="Nhập cỡ tay 50–200%, cỡ bút 20–200.")
+            return
+        # Render at a consistent scale, then crop a swatch around the contact point.
+        canvas = np.full((720, 720, 3), (248, 245, 237), np.uint8)
+        draw_writing_tool(canvas, (360, 300), 0.4, cfg)
+        swatch = Image.fromarray(canvas[80:580, 20:700])
+        swatch.thumbnail((250, 100), Image.Resampling.LANCZOS)
+        self.tool_photo = self.ImageTk.PhotoImage(swatch)
+        self.tool_preview.configure(image=self.tool_photo, text=f"Video: {self.v['tool_style'].get()}")
 
     def set_busy(self, busy):
         for widget, enabled_state in self.controls:
@@ -931,6 +967,10 @@ def self_test(output):
         if not renderer.strokes:
             raise RuntimeError("Không tạo được đường nét.")
         outputs = []
+        reference_frames = None
+        hand_pixels = {}
+        comparison = Image.new("RGB", (cfg.width * 3, cfg.height + 32), "white")
+        comparison_draw = ImageDraw.Draw(comparison)
         for style in TOOL_STYLES.values():
             style_cfg = replace(cfg, tool_style=style, hand_size=135)
             output = run_batch([source], style_cfg, folder / style, cancel)[0]
@@ -941,9 +981,27 @@ def self_test(output):
             expected = cfg.frame_count * cfg.width * cfg.height * 3
             if decoded.returncode or len(decoded.stdout) != expected:
                 raise RuntimeError(f"Không giải mã được đủ khung hình MP4: {style}.")
+            frames = np.frombuffer(decoded.stdout, np.uint8).reshape(
+                cfg.frame_count, cfg.height, cfg.width, 3).astype(np.int16)
+            tile_x = (len(outputs) - 1) * cfg.width
+            comparison.paste(Image.fromarray(frames[2].astype(np.uint8)), (tile_x, 32))
+            comparison_draw.text((tile_x + 12, 6), style.replace("_", " ").upper(),
+                                 fill="black", font=ImageFont.load_default(size=20))
+            if style == "pencil":
+                reference_frames = frames
+            else:
+                # Decoding alone cannot detect a lost hand setting. Verify that
+                # the actual MP4 contains a substantial overlay beyond the pencil.
+                changed = np.max(np.abs(frames - reference_frames), axis=3) > 40
+                visible_pixels = int(changed[1:cfg.draw_frames - 1].sum(axis=(1, 2)).max())
+                if visible_pixels < cfg.width * cfg.height * 0.003:
+                    raise RuntimeError(f"Video không hiển thị bàn tay đã chọn: {style}.")
+                hand_pixels[style] = visible_pixels
+        comparison.save(folder / "Hand-preview.png")
         result = {"status": "passed", "version": VERSION, "frames": cfg.frame_count,
                   "strokes": len(renderer.strokes), "text_regions": len(renderer.regions.text_boxes),
-                  "subject_model": "u2netp", "ffmpeg": find_ffmpeg(), "tool_styles": list(TOOL_STYLES.values()), "videos": outputs}
+                  "subject_model": "u2netp", "ffmpeg": find_ffmpeg(), "tool_styles": list(TOOL_STYLES.values()),
+                  "visible_hand_pixels": hand_pixels, "videos": outputs}
         (folder / "self-test.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         return 0
     except Exception:

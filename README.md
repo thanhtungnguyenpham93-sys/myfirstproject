@@ -1,4 +1,4 @@
-# Pencil Video Studio 3.1 — vẽ ảnh thành video
+# Pencil Video Studio 3.1.1 — vẽ ảnh thành video
 
 Ứng dụng cho Windows 10/11 x64: đưa nhiều ảnh vào, tự nhận diện vùng nổi bật và chữ, lập các đường nét rồi tạo video bút chì vẽ lần lượt. AI chạy trên máy, ảnh không được gửi lên dịch vụ bên ngoài.
 
@@ -16,7 +16,7 @@
 
 1. Trong **Ảnh đầu vào**, thêm JPG/JPEG, PNG, WEBP, BMP, TIFF hoặc GIF; đổi thứ tự bằng ↑/↓. Ảnh động dùng khung đầu. Ảnh trong suốt được ghép trên giấy trắng; hướng EXIF được áp dụng.
 2. Trong **Thiết lập vẽ → Video**, chọn YouTube, TikTok/Reels/Shorts, Facebook Feed hoặc kích thước khác.
-3. Trong **Bút & nét**, chọn loại bút, độ dày, tốc độ và độ mềm. Trong **Bàn tay**, chọn chỉ hiện bút, tay phải cầm bút hoặc tay trái cầm bút, màu da và kích thước tay **50–200%** bằng thanh kéo hoặc nhập số. Cỡ tay, cỡ bút hiển thị và độ dày nét được chỉnh riêng.
+3. Trong **Bút & nét**, chọn loại bút, độ dày, tốc độ và độ mềm. Trong **Bàn tay**, chọn chỉ hiện bút, tay phải cầm bút hoặc tay trái cầm bút, màu da và kích thước tay **50–200%** bằng thanh kéo hoặc nhập số. Chọn trực tiếp **Tay phải cầm bút** hoặc **Tay trái cầm bút**: hình minh họa bên dưới đổi ngay và lựa chọn này được áp dụng khi xuất MP4. Chọn **Ẩn bút và bàn tay** nếu không muốn hiển thị. Cỡ tay, cỡ bút hiển thị và độ dày nét được chỉnh riêng.
 4. Trong **Chủ thể & chữ**, chọn tách chủ thể bằng AI, theo vùng trung tâm hoặc tắt; chọn thứ tự vẽ. Có thể bật/tắt nhận diện chữ và ưu tiên khuôn mặt.
 5. Bấm **Xem vùng** để kiểm tra: xanh lá = chủ thể, vàng = chữ, xanh dương = khuôn mặt. Bấm **Xem tranh** để xem kết quả hoặc **Vẽ thử 6s** để xem thứ tự nét trên bản xem trước giảm kích thước.
 6. Chọn thư mục, bật ghép nếu cần và bấm **Xuất MP4**. Chờ thông báo **Đã xuất**; 100% khung hình vẫn cần bước hoàn tất MP4.
