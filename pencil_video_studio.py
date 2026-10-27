@@ -40,7 +40,7 @@ except ImportError:
     tk = None
 
 APP_NAME = "Pencil Video Studio"
-VERSION = "3.2.1"
+VERSION = "3.2.2"
 TOOL_CHOICES = {**TOOL_STYLES, "Ẩn bút và bàn tay": None}
 LOG = logging.getLogger(__name__)
 MAX_FILES = 200
@@ -613,7 +613,7 @@ class App:
             self.controls.append((checkbox, "normal"))
         self.tool_preview = ttk.Label(pages["hand"], compound="top", anchor="center")
         self.tool_preview.grid(row=4, column=0, columnspan=2, sticky="ew", pady=4)
-        ttk.Label(pages["hand"], text="Bút tự tăng cỡ theo tay để không bị che.\nVẽ thử 6s: có tay/bút. Xem tranh: tranh cuối.",
+        ttk.Label(pages["hand"], text="Đầu chì luôn hướng xuống, tay không xoay.\nVẽ thử 6s: có tay/bút. Xem tranh: tranh cuối.",
                   wraplength=390).grid(row=5, column=0, columnspan=2, sticky="w", pady=4)
         for key in ("tool_style", "hand_size", "skin_tone", "pen_size", "pencil_type"):
             self.v[key].trace_add("write", self.update_tool_preview)

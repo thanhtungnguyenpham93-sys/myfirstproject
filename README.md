@@ -1,4 +1,4 @@
-# Pencil Video Studio 3.2.1 — vẽ ảnh thành video
+# Pencil Video Studio 3.2.2 — vẽ ảnh thành video
 
 Ứng dụng cho Windows 10/11 x64: đưa nhiều ảnh vào, tự nhận diện vùng nổi bật và chữ, lập các đường nét rồi tạo video bút chì vẽ lần lượt. AI chạy trên máy, ảnh không được gửi lên dịch vụ bên ngoài.
 
@@ -39,7 +39,7 @@
 
 Các nét được tái dựng từ ảnh bằng thị giác máy tính, không phải ghi lại nét vẽ của một họa sĩ. Chữ được dò vị trí và vẽ lại theo hình dạng pixel; chương trình không đọc hiểu nội dung chữ hay mô phỏng chính xác thứ tự viết tay của từng ký tự.
 
-Bản 3.2 dùng mẫu bàn tay có sắc độ và chi tiết tự nhiên, được tạo bằng AI và đóng gói sẵn; đây không phải video quay tay người thật. Dáng tay nhỏ gọn hơn, cổ tay mờ dần ở mép và ngón tay ôm thân bút. Bút có phần thân trước/sau ngón tay, đầu chì và chóp gỗ nhìn rõ; khi tay lớn, chiều dài bút tự tăng tối thiểu để giữ tỷ lệ. Khi đầu chì đến gần mép ảnh, tay và bút tự xoay vào trong khung để giữ thân bút nhìn rõ; đầu chì vẫn bám đúng nét. Phần cổ tay ở ngoài khung có thể bị cắt. Tay/bút chỉ xuất hiện trong lúc vẽ và ẩn khi tranh hoàn tất. Dùng **Vẽ thử 6s** để xem bàn tay chuyển động; **Xem tranh** chỉ hiển thị kết quả cuối. Tay lớn có thể che nhiều chi tiết đang vẽ hoặc nằm một phần ngoài khung; giảm cỡ tay nếu cần. Cấu hình cũ mặc định vẫn chỉ hiện bút.
+Bản 3.2 dùng mẫu bàn tay có sắc độ và chi tiết tự nhiên, được tạo bằng AI và đóng gói sẵn; đây không phải video quay tay người thật. Dáng tay nhỏ gọn hơn, cổ tay mờ dần ở mép và ngón tay ôm thân bút. Bút có phần thân trước/sau ngón tay, đầu chì và chóp gỗ nhìn rõ; khi tay lớn, chiều dài bút tự tăng tối thiểu để giữ tỷ lệ. Từ bản 3.2.2, tay và bút giữ một góc cố định, đầu chì luôn hướng xuống. Tay chỉ di chuyển theo nét, không xoay theo vị trí, mép ảnh hay thời gian. Phần tay/bút ở ngoài khung được cắt theo biên ảnh; chương trình không xoay tay để ép toàn bộ bút vào khung. Tay/bút chỉ xuất hiện trong lúc vẽ và ẩn khi tranh hoàn tất. Dùng **Vẽ thử 6s** để xem bàn tay chuyển động; **Xem tranh** chỉ hiển thị kết quả cuối. Tay lớn có thể che nhiều chi tiết đang vẽ hoặc nằm một phần ngoài khung; giảm cỡ tay nếu cần. Cấu hình cũ mặc định vẫn chỉ hiện bút.
 
 ## Preset mạng xã hội
 

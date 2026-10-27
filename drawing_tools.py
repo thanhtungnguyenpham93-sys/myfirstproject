@@ -44,7 +44,11 @@ def hand_texture(skin_tone):
 
 
 def tool_geometry(width, height, time_fraction, cfg, position=None):
-    """Keep sufficient shaft on BOTH sides of the grip, including at 200% hand."""
+    """Fixed downward nib pose, independent of path position and elapsed time.
+
+    time_fraction and position remain accepted by existing callers; neither may
+    rotate the tool. Only translation follows the stroke, including at borders.
+    """
     resolution_scale = min(width, height) / 720
     hand_unit = 60 * cfg.hand_size / 100 * resolution_scale
     hand = cfg.tool_style != "pencil"
@@ -53,35 +57,16 @@ def tool_geometry(width, height, time_fraction, cfg, position=None):
         # A tiny independent pencil cannot be held by a large hand. pen_size is
         # a preference, with this anatomical minimum applied only in hand mode.
         length = max(length, hand_unit * 3.2)
-    angle_delta = math.sin(time_fraction * 7) * 0.025 * cfg.smoothness
-    angle = -math.pi / 3 + angle_delta
+    # direction runs from nib to the back of the pencil. Its negative y places
+    # the shaft above the nib: the sharpened end always points downward.
+    angle = -math.pi / 3
     direction = np.array([math.cos(angle), math.sin(angle)])
     normal = np.array([-direction[1], direction[0]])
-    rotation = np.array([[math.cos(angle_delta), -math.sin(angle_delta)],
-                         [math.sin(angle_delta), math.cos(angle_delta)]])
+    rotation = np.eye(2)
     if cfg.tool_style == "left_hand":
         direction[0] *= -1
         normal[0] *= -1
         rotation[0] *= -1
-    if hand and position is not None:
-        # Near the border, turn the whole grip toward the page interior. Moving
-        # the nib would detach it from the drawing; rotating around it preserves
-        # contact while keeping the shaft from disappearing above the top edge.
-        px, py = position
-        distance = max(0, min(px, py, width-1-px, height-1-py))
-        weight = np.clip(1 - distance / max(length, 1), 0, 1)
-        weight = weight * weight * (3-2*weight)
-        inward = np.array([width/2-px, height/2-py])
-        if weight > 0 and np.linalg.norm(inward) > 1:
-            # The hand and pencil occupy a roughly 60-degree wedge. Aim the
-            # middle of that wedge inward, so both fit at the image corners.
-            spread = -math.pi/6 if cfg.tool_style == "left_hand" else math.pi/6
-            mean_angle = math.atan2(direction[1], direction[0]) + spread
-            delta = math.atan2(inward[1], inward[0]) - mean_angle
-            delta = math.atan2(math.sin(delta), math.cos(delta)) * weight
-            turn = np.array([[math.cos(delta), -math.sin(delta)],
-                             [math.sin(delta), math.cos(delta)]])
-            direction, normal, rotation = turn @ direction, turn @ normal, turn @ rotation
     # Narrow shaft independent of total length; a long pencil must not be a club.
     radius = max(1.2 * resolution_scale, min(length * 0.028, hand_unit * 0.085)) if hand else length * 0.04
     return hand_unit, length, radius, direction, normal, rotation

@@ -86,17 +86,31 @@ class HandTests(unittest.TestCase):
         for picture in pictures[1:]:
             self.assertGreater(np.count_nonzero(np.any(picture != pictures[0], axis=2)), 500)
 
-    def test_pencil_remains_visible_at_corners_and_edges(self):
-        for style in ("left_hand", "right_hand"):
+    def test_downward_pose_is_fixed_at_all_times_and_page_positions(self):
+        for style in ("pencil", "left_hand", "right_hand"):
+            cfg = replace(self.cfg, tool_style=style, hand_size=200, pen_size=20, smoothness=1)
+            reference = tool_geometry(720, 720, 0, cfg, (360, 360))
+            self.assertLess(reference[3][1], 0, "Thân bút phải ở phía trên đầu chì")
             for tip in ((0, 0), (719, 0), (719, 719), (0, 719),
-                        (360, 0), (360, 719), (0, 360), (719, 360)):
-                with self.subTest(style=style, tip=tip):
-                    cfg = replace(self.cfg, tool_style=style, hand_size=200, pen_size=20)
-                    frame = np.full((720, 720, 3), 255, np.uint8)
-                    draw_writing_tool(frame, tip, 0.4, cfg)
-                    colored = np.max(np.abs(frame.astype(int) - PEN_COLORS["hb"]), axis=2) < 18
-                    self.assertGreater(colored.sum(), 300, "Bút nằm ngoài khung ở mép ảnh")
-                    self.assertLess(int(frame[tip[1], tip[0]].max()), 80)
+                        (360, 0), (360, 719), (0, 360), (719, 360), (360, 360)):
+                for t in (0, 0.2, 0.6, 1):
+                    with self.subTest(style=style, tip=tip, time=t):
+                        actual = tool_geometry(720, 720, t, cfg, tip)
+                        for index in (3, 4, 5):
+                            np.testing.assert_array_equal(actual[index], reference[index])
+
+    def test_rendered_hand_does_not_wobble_or_turn_at_edges(self):
+        # Compare actual composited pixels, not just the returned angle. Parts
+        # outside the image may be clipped, but the pose must remain unchanged.
+        for style in ("pencil", "left_hand", "right_hand"):
+            cfg = replace(self.cfg, tool_style=style, hand_size=200, pen_size=20, smoothness=1)
+            for tip in ((300, 430), (300, 20), (20, 300), (700, 300)):
+                reference = np.full((720, 720, 3), 255, np.uint8)
+                draw_writing_tool(reference, tip, 0, cfg)
+                for t in (0.2, 0.6, 1):
+                    actual = np.full_like(reference, 255)
+                    draw_writing_tool(actual, tip, t, cfg)
+                    np.testing.assert_array_equal(actual, reference)
 
     def test_settings_roundtrip_and_old_version_defaults(self):
         with tempfile.TemporaryDirectory() as directory:
